@@ -14,6 +14,7 @@ import {
 import { describeCorner, describeLabel, describeStyle } from "~/lib/display";
 import { BADGE_STYLES, SELECTABLE_LABELS } from "~/lib/compliance/types";
 import { matchChoice } from "~/lib/quick-choices";
+import { boolAttr } from "~/lib/polaris-form";
 
 export interface EditorImage {
   imageId: string;
@@ -444,7 +445,7 @@ export function ProductEditor({ images, defaults }: ProductEditorProps) {
 
             <s-button
               variant="primary"
-              disabled={busy || selected.size === 0}
+              disabled={boolAttr(busy || selected.size === 0)}
               onClick={() => save(true)}
             >
               {busy
@@ -452,7 +453,7 @@ export function ProductEditor({ images, defaults }: ProductEditorProps) {
                 : `Apply to ${selected.size} selected image${selected.size === 1 ? "" : "s"}`}
             </s-button>
 
-            <s-button disabled={busy} onClick={() => save(false)}>
+            <s-button disabled={boolAttr(busy)} onClick={() => save(false)}>
               Apply to this image only
             </s-button>
 

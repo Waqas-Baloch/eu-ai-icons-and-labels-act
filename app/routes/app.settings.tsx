@@ -6,7 +6,7 @@ import prisma from "~/db.server";
 import { authenticate } from "~/shopify.server";
 import { appendAudit } from "~/lib/audit.server";
 import { reassessStored } from "~/lib/scan.server";
-import { collectFields } from "~/lib/polaris-form";
+import { boolAttr, collectFields } from "~/lib/polaris-form";
 import { useFieldValues } from "~/hooks/useFieldValues";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -199,7 +199,7 @@ export default function Settings() {
         </s-section>
 
         <s-section>
-          <s-button variant="primary" disabled={busy} onClick={save}>
+          <s-button variant="primary" disabled={boolAttr(busy)} onClick={save}>
             {busy ? "Saving…" : "Save settings"}
           </s-button>
 

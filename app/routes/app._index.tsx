@@ -8,6 +8,7 @@ import { verifyShopChain } from "~/lib/audit.server";
 import { scanCatalog } from "~/lib/scan.server";
 import { describeState } from "~/lib/display";
 import { EmptyState } from "~/components/EmptyState";
+import { boolAttr } from "~/lib/polaris-form";
 
 const PAGE_SIZE = 25;
 
@@ -169,7 +170,7 @@ export default function Products() {
             <s-stack direction="inline" gap="base">
               <s-button
                 variant="primary"
-                disabled={busy}
+                disabled={boolAttr(busy)}
                 onClick={() => fetcher.submit({}, { method: "post" })}
               >
                 {busy ? "Scanning…" : "Scan catalog"}
@@ -211,7 +212,7 @@ export default function Products() {
           </Link>
           <s-button
             variant="tertiary"
-            disabled={busy}
+            disabled={boolAttr(busy)}
             onClick={() => fetcher.submit({}, { method: "post" })}
           >
             {busy ? "Scanning…" : "Rescan"}

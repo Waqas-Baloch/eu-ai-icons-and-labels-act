@@ -10,6 +10,27 @@
  * there is no event plumbing to maintain.
  */
 
+/**
+ * Passes a boolean to a Polaris web component so that `false` means false.
+ *
+ * React 18 sets unknown JSX props on a custom element as attributes, and it
+ * stringifies booleans on the way — so `disabled={false}` renders the attribute
+ * `disabled="false"`. HTML boolean attributes are presence-based, so the
+ * element reads that as disabled. The result is a button that can never be
+ * clicked, showing its idle label the whole time.
+ *
+ * Returning `undefined` instead of `false` is what fixes it: React omits an
+ * attribute whose value is `undefined`, for custom elements too. React 19
+ * assigns properties and does not need this, but Remix v2 peers React 18.
+ *
+ * Use for every boolean prop on an `s-*` element — `disabled`, `checked`,
+ * `loading`, `open`, `required`. Not for `aria-*`, which really are
+ * string-valued and take "false" correctly.
+ */
+export function boolAttr(value: boolean | undefined): true | undefined {
+  return value ? true : undefined;
+}
+
 export type FieldKind = "value" | "checked" | "values" | "radio";
 
 export interface FieldSpec {

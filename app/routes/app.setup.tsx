@@ -6,7 +6,7 @@ import prisma from "~/db.server";
 import { authenticate } from "~/shopify.server";
 import { appendAudit } from "~/lib/audit.server";
 import { scanCatalog } from "~/lib/scan.server";
-import { collectFields } from "~/lib/polaris-form";
+import { boolAttr, collectFields } from "~/lib/polaris-form";
 import { useFieldValues } from "~/hooks/useFieldValues";
 import { redirectEmbedded } from "~/lib/embedded-redirect.server";
 
@@ -236,7 +236,7 @@ export default function Setup() {
               </s-banner>
               <s-button
                 variant="primary"
-                disabled={busy}
+                disabled={boolAttr(busy)}
                 onClick={() => send("acknowledge")}
               >
                 I understand — continue
@@ -272,7 +272,7 @@ export default function Setup() {
                   <s-paragraph>{fetcher.data.error}</s-paragraph>
                 </s-banner>
               )}
-              <s-button variant="primary" disabled={busy} onClick={() => send("scan")}>
+              <s-button variant="primary" disabled={boolAttr(busy)} onClick={() => send("scan")}>
                 {busy ? "Scanning…" : "Start scan"}
               </s-button>
             </s-stack>
@@ -299,7 +299,7 @@ export default function Setup() {
               <s-stack direction="inline" gap="base">
                 <s-button
                   variant="primary"
-                  disabled={busy}
+                  disabled={boolAttr(busy)}
                   onClick={() =>
                     send("posture", [
                       { name: "conservativeDefault", kind: "checked" },
@@ -340,7 +340,7 @@ export default function Setup() {
               </s-select>
               <s-button
                 variant="primary"
-                disabled={busy}
+                disabled={boolAttr(busy)}
                 onClick={() =>
                   send("appearance", [
                     { name: "badgeVariant" },
@@ -381,7 +381,7 @@ export default function Setup() {
                   automatically, so confirm below once done.
                 </s-paragraph>
               </s-banner>
-              <s-button variant="primary" disabled={busy} onClick={() => send("finish")}>
+              <s-button variant="primary" disabled={boolAttr(busy)} onClick={() => send("finish")}>
                 I&rsquo;ve enabled them — finish setup
               </s-button>
               <Link to="/app">

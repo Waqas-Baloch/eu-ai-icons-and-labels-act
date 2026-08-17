@@ -66,3 +66,44 @@ export function useLiveFieldValue(
 
   return value;
 }
+
+/**
+ * Tracks whether one named checkbox is ticked, for gating an action on it.
+ *
+ * The checked counterpart of useLiveFieldValue, and capture-phase for the same
+ * reasons: React 18 does not forward a custom element's events to `onChange`,
+ * and capture also catches events that do not bubble, since capture runs from
+ * the root down to the target either way.
+ */
+export function useLiveFieldChecked(
+  containerRef: RefObject<HTMLElement | null>,
+  name: string,
+  initialChecked = false,
+): boolean {
+  const [checked, setChecked] = useState(initialChecked);
+
+  useEffect(() => setChecked(initialChecked), [initialChecked]);
+
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root) return;
+
+    const handler = (event: Event) => {
+      const target = event.target as
+        | (HTMLElement & { checked?: boolean })
+        | null;
+      if (!target?.getAttribute) return;
+      if (target.getAttribute("name") !== name) return;
+      setChecked(Boolean(target.checked));
+    };
+
+    root.addEventListener("change", handler, true);
+    root.addEventListener("input", handler, true);
+    return () => {
+      root.removeEventListener("change", handler, true);
+      root.removeEventListener("input", handler, true);
+    };
+  }, [containerRef, name]);
+
+  return checked;
+}

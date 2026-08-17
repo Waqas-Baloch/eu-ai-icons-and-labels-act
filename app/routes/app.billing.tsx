@@ -5,6 +5,7 @@ import prisma from "~/db.server";
 import { authenticate } from "~/shopify.server";
 import { appendAudit } from "~/lib/audit.server";
 import { isPlanName, PLANS, PLAN_DETAILS, type PlanName } from "~/lib/plans";
+import { boolAttr } from "~/lib/polaris-form";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { billing, session } = await authenticate.admin(request);
@@ -103,7 +104,7 @@ export default function Billing() {
                   ) : (
                     <s-button
                       variant="primary"
-                      disabled={busy}
+                      disabled={boolAttr(busy)}
                       onClick={() =>
                         fetcher.submit({ plan: plan.name }, { method: "post" })
                       }
