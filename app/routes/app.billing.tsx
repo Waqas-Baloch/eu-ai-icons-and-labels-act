@@ -4,14 +4,14 @@ import { useFetcher, useLoaderData } from "@remix-run/react";
 import prisma from "~/db.server";
 import { authenticate } from "~/shopify.server";
 import { appendAudit } from "~/lib/audit.server";
-import { isPlanName, PLANS, PLAN_DETAILS, type PlanName } from "~/lib/plans";
+import { isPlanName, PLANS, PLAN_DETAILS } from "~/lib/plans";
 import { boolAttr } from "~/lib/polaris-form";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { billing, session } = await authenticate.admin(request);
 
   const check = await billing.check({
-    plans: [PLANS.STARTER, PLANS.GROWTH, PLANS.SCALE],
+    plans: [PLANS.UNLIMITED],
     isTest: process.env.SHOPIFY_BILLING_TEST !== "0",
   });
 
@@ -58,10 +58,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   return { ok: true };
 };
 
+// The only plan. Named here so the component reads as "the plan", not "a plan".
+const PLAN = PLAN_DETAILS[0];
+
 export default function Billing() {
   const data = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const busy = fetcher.state !== "idle";
+
+  // hasActivePayment covers the trial too: Shopify reports a subscription in
+  // its trial period as active, which is what we want — the merchant has
+  // subscribed and should not be asked to again.
+  const isSubscribed = data.hasActivePayment || data.activePlans.includes(PLAN.name);
 
   return (
     <s-page heading="Plan">
@@ -74,48 +82,57 @@ export default function Billing() {
       </s-section>
 
       {!data.hasActivePayment && (
-        <s-banner tone="info" heading="14-day free trial">
+        <s-banner tone="info" heading={`${PLAN.trialDays}-day free trial`}>
           <s-paragraph>
-            Every plan starts with a 14-day trial. Article 50(4) is an ongoing
-            obligation — new products need assessing as you add them — so the app
-            keeps working in the background once set up.
+            The trial is the full app, not a reduced version, and nothing is
+            charged until it ends. Article 50(4) is an ongoing obligation — new
+            products need assessing as you add them — so the app keeps working
+            in the background once set up.
           </s-paragraph>
         </s-banner>
       )}
 
-      <s-section heading="Plans">
-        <s-paragraph>
-          Your catalog currently has {data.productCount} assessed product
-          {data.productCount === 1 ? "" : "s"}.
-        </s-paragraph>
+      {/*
+        One plan, so this is a description rather than a comparison. Nothing
+        here asks the merchant to work out which tier their catalog falls into.
+      */}
+      <s-section heading="Plan">
+        <s-stack direction="block" gap="base">
+          <s-stack direction="block" gap="small">
+            <s-heading>{PLAN.name}</s-heading>
+            <s-text type="strong">
+              {PLAN.price} USD per month, per store
+            </s-text>
+            <s-text color="subdued">{PLAN.blurb}</s-text>
+          </s-stack>
 
-        <s-stack direction="inline" gap="base" alignItems="stretch">
-          {PLAN_DETAILS.map((plan) => {
-            const active = data.activePlans.includes(plan.name);
-            return (
-              <s-box key={plan.name} padding="base" borderWidth="base" borderRadius="base">
-                <s-stack direction="block" gap="small">
-                  <s-heading>{plan.name}</s-heading>
-                  <s-text type="strong">{plan.price} / month</s-text>
-                  <s-text color="subdued">{plan.products}</s-text>
-                  <s-paragraph>{plan.blurb}</s-paragraph>
-                  {active ? (
-                    <s-badge tone="success">Current plan</s-badge>
-                  ) : (
-                    <s-button
-                      variant="primary"
-                      disabled={boolAttr(busy)}
-                      onClick={() =>
-                        fetcher.submit({ plan: plan.name }, { method: "post" })
-                      }
-                    >
-                      {data.hasActivePayment ? "Switch to this plan" : "Start trial"}
-                    </s-button>
-                  )}
-                </s-stack>
-              </s-box>
-            );
-          })}
+          <s-stack direction="block" gap="small-100">
+            {PLAN.features.map((feature) => (
+              <s-text key={feature}>• {feature}</s-text>
+            ))}
+          </s-stack>
+
+          <s-paragraph>
+            <s-text color="subdued">
+              Your catalog currently has {data.productCount} assessed product
+              {data.productCount === 1 ? "" : "s"}, and there is no limit on how
+              many you assess.
+            </s-text>
+          </s-paragraph>
+
+          {isSubscribed ? (
+            <s-badge tone="success">Subscribed</s-badge>
+          ) : (
+            <s-button
+              variant="primary"
+              disabled={boolAttr(busy)}
+              onClick={() => fetcher.submit({ plan: PLAN.name }, { method: "post" })}
+            >
+              {busy
+                ? "Opening Shopify…"
+                : `Start ${PLAN.trialDays}-day free trial`}
+            </s-button>
+          )}
         </s-stack>
 
         {fetcher.data && "error" in fetcher.data && fetcher.data.error && (

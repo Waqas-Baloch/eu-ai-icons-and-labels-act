@@ -146,4 +146,6 @@ Submission happens in the **Partner Dashboard**, not the CLI. You need:
   action. This is the first thing to fix after launch, and arguably before.
 - **Terms are engineer-drafted.** The app gates on them. See
   `docs/LEGAL-POSTURE.md` for the review checklist.
-- **Pricing sits above the market.** See `docs/MARKET.md`.
+- **Pricing is a single $6.99/mo plan** with a 7-day trial, deliberately below
+  the $9.99–15 field. It only works if the app stays self-service — see the
+  pricing decision in `docs/MARKET.md` for what that trades away.

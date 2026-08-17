@@ -8,7 +8,7 @@ import {
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 
 import prisma from "./db.server";
-import { PLANS } from "./lib/plans";
+import { PLANS, PLAN_PRICE_USD, PLAN_TRIAL_DAYS } from "./lib/plans";
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
@@ -19,36 +19,18 @@ const shopify = shopifyApp({
   authPathPrefix: "/auth",
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
+  // Amount and trial length come from lib/plans.ts so the price the merchant
+  // is shown and the price they are charged cannot drift apart.
   billing: {
-    [PLANS.STARTER]: {
+    [PLANS.UNLIMITED]: {
       lineItems: [
         {
-          amount: 19,
+          amount: PLAN_PRICE_USD,
           currencyCode: "USD",
           interval: BillingInterval.Every30Days,
         },
       ],
-      trialDays: 14,
-    },
-    [PLANS.GROWTH]: {
-      lineItems: [
-        {
-          amount: 49,
-          currencyCode: "USD",
-          interval: BillingInterval.Every30Days,
-        },
-      ],
-      trialDays: 14,
-    },
-    [PLANS.SCALE]: {
-      lineItems: [
-        {
-          amount: 149,
-          currencyCode: "USD",
-          interval: BillingInterval.Every30Days,
-        },
-      ],
-      trialDays: 14,
+      trialDays: PLAN_TRIAL_DAYS,
     },
   },
   future: {

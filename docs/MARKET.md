@@ -67,7 +67,8 @@ Worth knowing before positioning:
   Merchant *awareness* is the bottleneck, and awareness is bought with education
   and marketing over months, not shipped.
 - **Pricing has already cleared at free–$25/mo**, clustering at $9.99–15. The
-  scaffolded $19/$49/$149 sits above almost the entire field.
+  original $19/$49/$149 scaffold sat above almost the entire field; pricing was
+  moved to a single $6.99/mo plan on 17 August 2026 (see below).
 - **Someone is selling a $199 lifetime licence** for a recurring regulatory
   obligation. Read that as a seller who does not believe in the recurring
   revenue, or is optimising for cash before the window closes. Either way it
@@ -107,19 +108,37 @@ search.
 4. **Commoditisation of the easy half.** Badge rendering is not defensible. The
    audit trail is, but only for buyers who care.
 
-## Implication for pricing
+## Pricing decision — 17 August 2026
 
-The scaffolded tiers in `app/lib/plans.ts` were set before this research and are
-above market. Two coherent options:
+**One plan: $6.99/mo per store, unlimited products and images, 7-day trial.**
 
-- **Long tail:** roughly $9 / $19 / $39, competing on features and polish.
-- **Agency and mid-market:** keep prices high, add multi-store management,
-  saved declaration presets, per-collection rules and exportable compliance
-  reports, and sell direct rather than through App Store search.
+This undercuts the whole observed field ($9.99–15) rather than competing inside
+it. The reasoning it rests on:
 
-The second fits what has been built. The bulk-apply path was already generalised
-to `applyDeclarationToImages(imageIds[])` so a filtered multi-select can reuse
-it without a rewrite.
+- **The obligation does not scale with catalog size.** Article 50(4) applies the
+  same to 10 products and 10,000, so metering by product count prices the
+  obligation rather than the work. Tiers also create the worst failure mode a
+  compliance tool can have: a merchant who hits a ceiling mid-catalog and ships
+  a partly-labelled storefront.
+- **Nothing here is defensible on features.** Badge rendering is commodity. A
+  low, single, obvious price is a cheaper way to be chosen than a feature
+  argument against seven competitors.
+- **Zero reviews across the field means the bottleneck is awareness, not
+  price.** A low price removes deliberation from the install decision, which is
+  what matters while merchants are still discovering the duty exists.
+
+What this gives up, stated plainly:
+
+- **$6.99 will not fund support at volume.** At Shopify's 0% revenue share under
+  $1M it is ~$6.99 net, so ten support emails can cost more than a store's
+  annual revenue. This works only if the app stays genuinely self-service.
+- **It forecloses the agency route for now.** Multi-store management, saved
+  presets and per-collection rules were the case for pricing high. That path is
+  not closed — the bulk-apply path is already generalised to
+  `applyDeclarationToImages(imageIds[])` — but it would need a second plan, and
+  adding one after launch is harder than starting with it.
+- **Raising the price later is harder than lowering it.** Existing subscribers
+  must approve a new charge, and some will simply churn instead.
 
 **Neither option is quick money.** This is a slow trust business with a real and
 permanent legal driver behind it.

@@ -7,47 +7,50 @@
  *
  * These strings are the contract between the Shopify Billing API, the
  * `Shop.plan` column and the entitlement checks, so they must not be renamed
- * without a migration.
+ * without a migration. A rename also orphans live subscriptions: billing.check
+ * matches on the plan name, so a merchant subscribed under an old name reads
+ * as having no active payment.
+ *
+ * One plan, deliberately. Article 50(4) applies the same to a ten-product store
+ * and a ten-thousand-product one — the duty does not scale with catalog size,
+ * so metering it by product count would price the obligation rather than the
+ * work. It also removes the worst failure mode of a tiered compliance tool: a
+ * merchant who hits a ceiling mid-catalog and is left partly labelled.
  */
 
 export const PLANS = {
-  STARTER: "Starter",
-  GROWTH: "Growth",
-  SCALE: "Scale",
+  UNLIMITED: "Unlimited",
 } as const;
 
 export type PlanName = (typeof PLANS)[keyof typeof PLANS];
 
+/** USD per 30 days. Mirrored in the billing config in shopify.server.ts. */
+export const PLAN_PRICE_USD = 6.99;
+
+/** Days of full access before the first charge. */
+export const PLAN_TRIAL_DAYS = 7;
+
 export interface PlanDetail {
   name: PlanName;
   price: string;
-  products: string;
+  trialDays: number;
   blurb: string;
-  /** Assessed-product ceiling; null means unlimited. */
-  productLimit: number | null;
+  features: string[];
 }
 
 export const PLAN_DETAILS: PlanDetail[] = [
   {
-    name: PLANS.STARTER,
-    price: "$19",
-    products: "Up to 100 products",
-    blurb: "For small catalogs with occasional AI imagery.",
-    productLimit: 100,
-  },
-  {
-    name: PLANS.GROWTH,
-    price: "$49",
-    products: "Up to 1,000 products",
-    blurb: "For stores generating product imagery regularly.",
-    productLimit: 1000,
-  },
-  {
-    name: PLANS.SCALE,
-    price: "$149",
-    products: "Unlimited products",
-    blurb: "For large catalogs and multi-market stores.",
-    productLimit: null,
+    name: PLANS.UNLIMITED,
+    price: `$${PLAN_PRICE_USD.toFixed(2)}`,
+    trialDays: PLAN_TRIAL_DAYS,
+    blurb: "Everything, for one price per store.",
+    features: [
+      "Unlimited products and images",
+      "Official EU AI Act label artwork",
+      "Free placement and sizing on every image",
+      "Tamper-evident audit trail, exportable as CSV",
+      "Automatic re-assessment when you add or change a photo",
+    ],
   },
 ];
 

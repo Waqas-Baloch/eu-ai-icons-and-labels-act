@@ -58,7 +58,9 @@ model Shop {
   uninstalledAt DateTime?
 
   // Billing
-  plan            String   @default("none") // none | starter | growth | scale
+  // "none" until the merchant subscribes. One paid plan only — see
+  // app/lib/plans.ts for why the price is not metered by catalog size.
+  plan            String   @default("none") // none | Unlimited
   subscriptionId  String?
   trialEndsAt     DateTime?
 
