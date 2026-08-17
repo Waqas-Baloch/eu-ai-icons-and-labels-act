@@ -1,0 +1,58 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+#
+# NOTE: `shopify app config link` rewrites this file and drops anything it did
+# not generate. It has already removed the webhook subscriptions below once.
+# If you re-run it, check they survived — without the privacy topics the App
+# Store review fails, and without products/create+update the catalog silently
+# stops being re-assessed when a merchant swaps a photo.
+
+client_id = "3a33e7dcdab270dc87e7ba74c8bd53f9"
+name = "EU - AI Icons and Labels Act"
+handle = "eu-ai-icons-and-labels-act"
+application_url = "https://shopify.dev/apps/default-app-home"
+embedded = true
+
+[access_scopes]
+# read_products  — enumerate the catalog and its images for assessment
+# write_products — publish disclosure decisions to product metafields
+scopes = "read_products,write_products"
+
+[auth]
+redirect_urls = [ "https://shopify.dev/apps/default-app-home/api/auth" ]
+
+[webhooks]
+# Pinned to the current stable version, matching ApiVersion.July26 in
+# app/shopify.server.ts. The CLI defaults to the newest version on offer, which
+# in August 2026 is the 2026-10 release candidate — not what the code targets,
+# and not something to submit for review on.
+api_version = "2026-07"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/uninstalled" ]
+  uri = "/webhooks/app/uninstalled"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/scopes_update" ]
+  uri = "/webhooks/app/scopes_update"
+
+  [[webhooks.subscriptions]]
+  topics = [ "products/create", "products/update" ]
+  uri = "/webhooks/products/upsert"
+
+  [[webhooks.subscriptions]]
+  topics = [ "products/delete" ]
+  uri = "/webhooks/products/delete"
+
+  # Mandatory privacy webhooks — required for App Store review.
+  # These go under `compliance_topics`, NOT `topics`. Declaring them as regular
+  # topics is rejected with "The following topic is invalid".
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+  uri = "/webhooks/privacy"
+
+[pos]
+embedded = false
+
+[build]
+include_config_on_deploy = true
+automatically_update_urls_on_dev = true

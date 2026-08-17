@@ -1,0 +1,106 @@
+{% comment %}
+  App embed — toggled on once, applies across the storefront.
+
+  Overlays the EU label directly on product images that need disclosure. This
+  runs client-side because an app embed cannot alter the theme's own image
+  markup, so it has to find the images and anchor a badge to them.
+
+  Because it depends on JavaScript and on matching the theme's markup, it is
+  the convenience layer. The "AI content disclosure" app block is the path that
+  actually guarantees the notice is in the HTML, and merchants are told to add
+  it in the app's setup instructions.
+{% endcomment %}
+
+{%- liquid
+  assign state = product.metafields.eu_ai_act.state.value
+  assign images_meta = product.metafields.eu_ai_act.images.value
+  assign active = false
+
+  if state == 'required' or state == 'reduced' or state == 'unknown'
+    assign active = true
+  endif
+-%}
+
+{%- if product != blank and active and images_meta != blank -%}
+  {{ 'eu-ai-disclosure.css' | asset_url | stylesheet_tag }}
+
+  <script type="application/json" id="eu-ai-act-disclosure-data">
+    {
+      "state": {{ state | default: 'unknown' | json }},
+      "images": {{ images_meta | json }},
+      "style": {{ block.settings.badge_style | default: 'black' | json }},
+      "size": {{ block.settings.badge_size | default: 'medium' | json }},
+      "placement": {{ block.settings.placement | default: 'bottom_left' | json }},
+      "assets": {
+        "ai_generated": {
+          "black_transparent": {{ 'eu-ai-generated-black.png' | asset_url | json }},
+          "white_transparent": {{ 'eu-ai-generated-white.png' | asset_url | json }},
+          "black": {{ 'eu-ai-generated-black-solid.png' | asset_url | json }},
+          "white": {{ 'eu-ai-generated-white-solid.png' | asset_url | json }}
+        },
+        "ai_modified": {
+          "black_transparent": {{ 'eu-ai-modified-black.png' | asset_url | json }},
+          "white_transparent": {{ 'eu-ai-modified-white.png' | asset_url | json }},
+          "black": {{ 'eu-ai-modified-black-solid.png' | asset_url | json }},
+          "white": {{ 'eu-ai-modified-white-solid.png' | asset_url | json }}
+        },
+        "ai": {
+          "black_transparent": {{ 'eu-ai-black.png' | asset_url | json }},
+          "white_transparent": {{ 'eu-ai-white.png' | asset_url | json }},
+          "black": {{ 'eu-ai-black-solid.png' | asset_url | json }},
+          "white": {{ 'eu-ai-white-solid.png' | asset_url | json }}
+        }
+      }
+    }
+  </script>
+
+  <script src="{{ 'eu-ai-disclosure.js' | asset_url }}" defer></script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "AI disclosure overlay",
+  "target": "body",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "Overlays the official EU label on product images that need disclosure. Add the 'AI content disclosure' block to your product template as well — that one renders server-side and does not depend on JavaScript."
+    },
+    {
+      "type": "select",
+      "id": "badge_style",
+      "label": "Badge style",
+      "default": "black",
+      "options": [
+        { "value": "black", "label": "Black — solid (recommended)" },
+        { "value": "white", "label": "White — solid" },
+        { "value": "black_transparent", "label": "Black — translucent" },
+        { "value": "white_transparent", "label": "White — translucent" }
+      ]
+    },
+    {
+      "type": "select",
+      "id": "badge_size",
+      "label": "Badge size",
+      "default": "medium",
+      "options": [
+        { "value": "small", "label": "Small" },
+        { "value": "medium", "label": "Medium" },
+        { "value": "large", "label": "Large" }
+      ]
+    },
+    {
+      "type": "select",
+      "id": "placement",
+      "label": "Position on image",
+      "default": "bottom_left",
+      "options": [
+        { "value": "top_left", "label": "Top left" },
+        { "value": "top_right", "label": "Top right" },
+        { "value": "bottom_left", "label": "Bottom left" },
+        { "value": "bottom_right", "label": "Bottom right" }
+      ]
+    }
+  ]
+}
+{% endschema %}

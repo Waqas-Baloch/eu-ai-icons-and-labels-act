@@ -1,0 +1,317 @@
+/* Product image editor. Scoped under .ed- to stay clear of Polaris internals. */
+
+.ed-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .ed-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- Image selection strip --- */
+
+.ed-strip {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ed-tile {
+  position: relative;
+  width: 88px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  background: #fff;
+  padding: 0;
+  display: block;
+}
+
+.ed-tile img {
+  display: block;
+  width: 100%;
+  height: 88px;
+  object-fit: cover;
+}
+
+.ed-tile--selected {
+  border-color: #005bd3;
+}
+
+.ed-tile--active {
+  box-shadow: 0 0 0 2px #005bd3;
+}
+
+.ed-tile__check {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  line-height: 1;
+  color: #005bd3;
+  font-weight: 700;
+}
+
+.ed-tile__flag {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  font-size: 10px;
+  text-align: center;
+  padding: 2px 0;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+}
+
+/* Ticked: the merchant has marked this image as AI and it carries a tag. */
+.ed-tile__flag--tagged {
+  background: #005bd3;
+}
+
+/* Unticked, but the storefront still shows a provisional label. Amber because
+   it needs an action — confirming the image is an ordinary photo. */
+.ed-tile__flag--labelled {
+  background: #b98900;
+}
+
+/* --- Canvas --- */
+
+.ed-stage-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+/*
+  Wraps the image exactly, so the badge's percentages and the 20px margin
+  resolve against the picture rather than a padded container.
+
+  The stage takes a definite width and the image fills it, rather than the
+  stage shrink-wrapping an auto-sized image. A shrink-to-fit box around an
+  image with no definite width collapses to zero whenever the image has no
+  intrinsic dimensions — an SVG with only a viewBox, or any image measured
+  before it decodes. That produced a 0x0 canvas in testing.
+*/
+.ed-stage {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 460px;
+  margin: 0 auto;
+  line-height: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f6f6f7;
+  touch-action: none;
+  user-select: none;
+}
+
+.ed-stage img.ed-photo {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* The 20px keep-out guide, shown while dragging. */
+.ed-safe {
+  position: absolute;
+  inset: 20px;
+  border: 1px dashed rgba(0, 91, 211, 0.65);
+  border-radius: 4px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.ed-stage--active .ed-safe {
+  opacity: 1;
+}
+
+/*
+  The official EU artwork and nothing else — no plate, padding or rounding
+  behind it. The PNGs are the published EU labels; drawing a container around
+  them alters how an official mark appears, and the transparent variants exist
+  precisely so the label can sit directly on the photograph.
+
+  Contrast is handled by choosing the black or white artwork, not by adding a
+  background.
+*/
+.ed-badge {
+  position: absolute;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 0;
+  cursor: grab;
+  line-height: 0;
+  box-sizing: border-box;
+}
+
+.ed-badge:active {
+  cursor: grabbing;
+}
+
+.ed-badge img {
+  display: block;
+  height: 100%;
+  width: auto;
+  max-width: none;
+  pointer-events: none;
+}
+
+.ed-badge:focus-visible {
+  outline: 2px solid #005bd3;
+  outline-offset: 2px;
+}
+
+/*
+  Selection box.
+
+  Standard direct-manipulation affordance: a hairline bounding box with square
+  handles at the corners, shown only while the badge is selected. None of it
+  reaches the storefront — it is editor chrome drawn outside the artwork, not a
+  container around it.
+*/
+/* 2px of breathing room between the artwork and the selection outline. The
+   artwork itself is trimmed to its ink bounds by scripts/prepare-badges.py,
+   so this gap is the only space around the mark. */
+.ed-badge--selected {
+  --ed-select-gap: 2px;
+  outline: 1px solid #005bd3;
+  outline-offset: var(--ed-select-gap);
+}
+
+.ed-handle {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background: #fff;
+  border: 1.5px solid #005bd3;
+  border-radius: 1px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9);
+  z-index: 3;
+  /* Only ever visible on the selected badge. Enforced here as well as in the
+     component so markup that renders the handles unconditionally still behaves. */
+  display: none;
+}
+
+.ed-badge--selected > .ed-handle {
+  display: block;
+}
+
+/* Handles are centred on the outline: half the 12px handle box, plus the gap. */
+.ed-badge--selected > .ed-handle {
+  --ed-handle-offset: calc(-6px - var(--ed-select-gap, 2px));
+}
+
+.ed-handle--nw {
+  top: var(--ed-handle-offset);
+  left: var(--ed-handle-offset);
+  cursor: nwse-resize;
+}
+.ed-handle--ne {
+  top: var(--ed-handle-offset);
+  right: var(--ed-handle-offset);
+  cursor: nesw-resize;
+}
+.ed-handle--sw {
+  bottom: var(--ed-handle-offset);
+  left: var(--ed-handle-offset);
+  cursor: nesw-resize;
+}
+.ed-handle--se {
+  bottom: var(--ed-handle-offset);
+  right: var(--ed-handle-offset);
+  cursor: nwse-resize;
+}
+
+/* Nothing to place when the image is not marked as AI. */
+.ed-stage--empty .ed-safe {
+  opacity: 0;
+}
+
+/* --- Toolbox --- */
+
+.ed-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  background: #fff;
+  position: sticky;
+  top: 16px;
+}
+
+.ed-field-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.ed-select,
+.ed-range {
+  display: block;
+  width: 100%;
+  font-size: 0.875rem;
+}
+
+.ed-select {
+  padding: 7px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  background: #fff;
+}
+
+.ed-hint {
+  font-size: 0.75rem;
+  color: #616161;
+  margin: 0;
+}
+
+.ed-readout {
+  font-size: 0.75rem;
+  color: #616161;
+  font-variant-numeric: tabular-nums;
+}
+
+.ed-divider {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.1);
+  margin: 2px 0;
+}
+
+.ed-corner-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.ed-corner-btn {
+  padding: 6px;
+  font-size: 0.75rem;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.ed-corner-btn:hover {
+  border-color: #005bd3;
+}

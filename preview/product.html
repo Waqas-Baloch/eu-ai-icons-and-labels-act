@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Editing dashboard — AI Disclosure preview</title>
+    <script src="https://cdn.shopify.com/shopifycloud/polaris.js"></script>
+    <link rel="stylesheet" href="preview.css" />
+    <!-- The app's real editor stylesheet, copied by scripts/sync-preview.mjs -->
+    <link rel="stylesheet" href="editor.css" />
+  </head>
+  <body>
+    <div class="pv-wrap">
+      <s-page heading="Fresh Carrots — 1kg">
+        <s-section>
+          <s-stack direction="block" gap="small">
+            <s-button variant="tertiary" icon="chevron-left" href="products.html">
+              All products
+            </s-button>
+            <s-stack direction="inline" gap="base" alignItems="center">
+              <s-badge tone="critical">Needs review</s-badge>
+              <s-text color="subdued">
+                4 images on this product page · assessed 16 Aug 2026, 09:12
+              </s-text>
+            </s-stack>
+          </s-stack>
+        </s-section>
+
+        <s-section heading="Which images are AI-generated?">
+          <s-paragraph>
+            <s-text color="subdued">
+              Tick every image made or edited with AI. Click one to edit its badge.
+            </s-text>
+          </s-paragraph>
+          <div class="ed-strip" id="strip"></div>
+          <s-paragraph><s-text color="subdued" id="selcount"></s-text></s-paragraph>
+        </s-section>
+
+        <s-section heading="Badge">
+          <div class="ed-layout">
+            <div class="ed-stage-wrap">
+              <div class="ed-stage" id="stage">
+                <img class="ed-photo" id="photo" src="samples/carrots.png" alt="" draggable="false" />
+                <div class="ed-safe" aria-hidden="true"></div>
+                <span class="ed-badge" id="badge" tabindex="0" role="button"
+                      aria-label="Badge position. Arrow keys move it.">
+                  <img id="badgeimg" src="badges/eu-ai-generated-black.png" alt="" />
+                  <span class="ed-handle ed-handle--nw" data-h="1" aria-hidden="true"></span>
+                  <span class="ed-handle ed-handle--ne" data-h="1" aria-hidden="true"></span>
+                  <span class="ed-handle ed-handle--sw" data-h="1" aria-hidden="true"></span>
+                  <span class="ed-handle ed-handle--se" data-h="1" aria-hidden="true"></span>
+                </span>
+              </div>
+            </div>
+
+            <div class="ed-tools">
+              <div>
+                <label class="ed-field-label" for="labeltype">Label type</label>
+                <select id="labeltype" class="ed-select">
+                  <option value="ai_generated">AI GENERATED</option>
+                  <option value="ai_modified">AI MODIFIED</option>
+                  <option value="ai">AI</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="ed-field-label" for="labelstyle">Label</label>
+                <select id="labelstyle" class="ed-select">
+                  <option value="black_transparent">Black, transparent background</option>
+                  <option value="white_transparent">White, transparent background</option>
+                  <option value="black">Black, solid background</option>
+                  <option value="white">White, solid background</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="ed-field-label" for="size">Size</label>
+                <input id="size" class="ed-range" type="range" min="2" max="20" step="0.5" value="6" />
+                <span class="ed-readout" id="sizeout"></span>
+              </div>
+
+              <div>
+                <span class="ed-field-label">Snap to a corner</span>
+                <div class="ed-corner-grid">
+                  <button class="ed-corner-btn" data-x="0" data-y="0">Top left</button>
+                  <button class="ed-corner-btn" data-x="1" data-y="0">Top right</button>
+                  <button class="ed-corner-btn" data-x="0" data-y="1">Bottom left</button>
+                  <button class="ed-corner-btn" data-x="1" data-y="1">Bottom right</button>
+                </div>
+              </div>
+
+              <p class="ed-hint">
+                Drag the badge anywhere on the image, or use arrow keys. It always
+                keeps 20&nbsp;px clear of every edge — the dashed guide shows the
+                area while you drag.
+              </p>
+
+              <span class="ed-readout" id="posout"></span>
+
+              <div class="ed-divider"></div>
+
+              <s-button variant="primary" id="applysel"></s-button>
+              <s-button id="applyone">Apply to this image only</s-button>
+            </div>
+          </div>
+        </s-section>
+      </s-page>
+    </div>
+
+    <script>
+      // Mirrors app/lib/badge-layout.ts
+      var MARGIN = 20, MINH = 2, MAXH = 20;
+      var clamp = function (v, a, b) { return Math.min(b, Math.max(a, v)); };
+
+      var IMAGES = [
+        { id: "a", src: "samples/carrots.png", alt: "Fresh carrots, front", featured: true,  sel: true,
+          own: { x: 0, y: 1, h: 6, type: "ai_generated", style: "black_transparent" } },
+        { id: "b", src: "samples/mug.svg",  alt: "Styled with mug",    featured: false, sel: true,
+          own: { x: 0, y: 1, h: 6, type: "ai_generated", style: "black_transparent" } },
+        { id: "c", src: "samples/lamp.svg", alt: "Lifestyle shot",     featured: false, sel: false },
+        { id: "d", src: "samples/chair.svg",alt: "In context",         featured: false, sel: false },
+      ];
+
+      // Mirrors ProductEditor: drafts -> saved -> template(first image).
+      var drafts = {};
+      var state = { active: "a", selected: false };
+
+      function shopDefault() {
+        return { x: 0, y: 1, h: 6, type: "ai_generated", style: "black_transparent" };
+      }
+      function templateSetup() {
+        return drafts[IMAGES[0].id] || IMAGES[0].own || shopDefault();
+      }
+      function setupFor(id) {
+        var img = IMAGES.filter(function (i) { return i.id === id; })[0];
+        return drafts[id] || (img && img.own) || templateSetup();
+      }
+      function current() { return setupFor(state.active); }
+      function edit(patch) {
+        var next = Object.assign({}, current(), patch);
+        drafts[state.active] = next;
+        return next;
+      }
+      // Compatibility shim so the drag handlers keep reading/writing `state`.
+      Object.defineProperties(state, {
+        x: { get: function () { return current().x; }, set: function (v) { edit({ x: v }); } },
+        y: { get: function () { return current().y; }, set: function (v) { edit({ y: v }); } },
+        h: { get: function () { return current().h; }, set: function (v) { edit({ h: v }); } },
+        type: { get: function () { return current().type; }, set: function (v) { edit({ type: v }); } },
+        style: { get: function () { return current().style; }, set: function (v) { edit({ style: v }); } },
+      });
+
+      var stage = document.getElementById("stage");
+      var badge = document.getElementById("badge");
+      var badgeImg = document.getElementById("badgeimg");
+      var handles = document.querySelectorAll(".ed-handle");
+      var photo = document.getElementById("photo");
+
+      function assetName(type, style) {
+        var base = { ai_generated: "eu-ai-generated", ai_modified: "eu-ai-modified", ai: "eu-ai" }[type];
+        var suffix = { black_transparent: "black", white_transparent: "white",
+                       black: "black-solid", white: "white-solid" }[style];
+        return base + "-" + suffix + ".png";
+      }
+
+      function render() {
+        var activeImg = IMAGES.filter(function (i) { return i.id === state.active; })[0];
+        var tagged = activeImg && activeImg.sel;
+        badge.style.display = tagged ? "" : "none";
+        stage.classList.toggle("ed-stage--empty", !tagged);
+        badge.classList.toggle("ed-badge--selected", !!state.selected && tagged);
+        badge.style.left = "calc(" + MARGIN + "px + " + state.x + " * (100% - " + MARGIN * 2 + "px))";
+        badge.style.top = "calc(" + MARGIN + "px + " + state.y + " * (100% - " + MARGIN * 2 + "px))";
+        badge.style.transform = "translate(" + -state.x * 100 + "%, " + -state.y * 100 + "%)";
+        badge.style.height = state.h + "%";
+        badgeImg.src = "badges/" + assetName(state.type, state.style);
+
+        document.getElementById("size").value = state.h;
+        document.getElementById("labeltype").value = state.type;
+        document.getElementById("labelstyle").value = state.style;
+        document.getElementById("sizeout").textContent = state.h.toFixed(1) + "% of image height";
+        document.getElementById("posout").textContent =
+          "Position " + Math.round(state.x * 100) + "% × " + Math.round(state.y * 100) + "%";
+
+        var n = IMAGES.filter(function (i) { return i.sel; }).length;
+        document.getElementById("applysel").textContent =
+          "Apply to " + n + " selected image" + (n === 1 ? "" : "s");
+        document.getElementById("selcount").textContent =
+          n + " of " + IMAGES.length + " selected.";
+      }
+
+      // --- drag + resize -------------------------------------------------
+      var mode = null;
+
+      function rect() { return stage.getBoundingClientRect(); }
+
+      stage.addEventListener("pointerdown", function () {
+        state.selected = false; render();
+      });
+
+      badge.addEventListener("pointerdown", function (e) {
+        if (e.target.dataset && e.target.dataset.h) return;
+        e.preventDefault(); e.stopPropagation();
+        mode = "move"; state.selected = true;
+        badge.setPointerCapture(e.pointerId);
+        stage.classList.add("ed-stage--active"); render();
+      });
+
+      [].forEach.call(handles, function (h) {
+        h.addEventListener("pointerdown", function (e) {
+          e.preventDefault(); e.stopPropagation();
+          mode = "resize"; state.selected = true;
+          h.setPointerCapture(e.pointerId);
+          stage.classList.add("ed-stage--active"); render();
+        });
+        h.addEventListener("pointermove", onMove);
+        h.addEventListener("pointerup", onUp);
+      });
+
+      function onMove(e) {
+        if (!mode) return;
+        var r = rect();
+        if (mode === "move") {
+          var spanX = r.width - MARGIN * 2, spanY = r.height - MARGIN * 2;
+          state.x = spanX > 0 ? clamp((e.clientX - r.left - MARGIN) / spanX, 0, 1) : 0.5;
+          state.y = spanY > 0 ? clamp((e.clientY - r.top - MARGIN) / spanY, 0, 1) : 0.5;
+        } else {
+          var anchorY = r.top + MARGIN + state.y * (r.height - MARGIN * 2);
+          state.h = clamp(Math.abs(e.clientY - anchorY) / r.height * 100, MINH, MAXH);
+          document.getElementById("size").value = state.h;
+        }
+        render();
+      }
+
+      function onUp() {
+        mode = null;
+        stage.classList.remove("ed-stage--active");
+      }
+
+      badge.addEventListener("pointermove", onMove);
+      badge.addEventListener("pointerup", onUp);
+      window.addEventListener("pointerup", onUp);
+
+      badge.addEventListener("keydown", function (e) {
+        var d = { ArrowLeft: [-0.02, 0], ArrowRight: [0.02, 0],
+                  ArrowUp: [0, -0.02], ArrowDown: [0, 0.02] }[e.key];
+        if (!d) return;
+        e.preventDefault();
+        state.x = clamp(state.x + d[0], 0, 1);
+        state.y = clamp(state.y + d[1], 0, 1);
+        render();
+      });
+
+      // --- toolbox -------------------------------------------------------
+      document.getElementById("labeltype").addEventListener("change", function (e) {
+        state.type = e.target.value; render();
+      });
+      document.getElementById("labelstyle").addEventListener("change", function (e) {
+        state.style = e.target.value; render();
+      });
+      document.getElementById("size").addEventListener("input", function (e) {
+        state.h = Number(e.target.value); render();
+      });
+      [].forEach.call(document.querySelectorAll(".ed-corner-btn"), function (b) {
+        b.addEventListener("click", function () {
+          state.x = Number(b.dataset.x); state.y = Number(b.dataset.y); render();
+        });
+      });
+
+      // --- image strip ---------------------------------------------------
+      function buildStrip() {
+        var strip = document.getElementById("strip");
+        strip.innerHTML = "";
+        IMAGES.forEach(function (image) {
+          var tile = document.createElement("button");
+          tile.type = "button";
+          tile.className = "ed-tile" + (image.sel ? " ed-tile--selected" : "") +
+                           (image.id === state.active ? " ed-tile--active" : "");
+          tile.innerHTML =
+            '<img src="' + image.src + '" alt="">' +
+            '<span class="ed-tile__check">' + (image.sel ? "✓" : "") + "</span>" +
+            (image.sel
+              ? '<span class="ed-tile__flag ed-tile__flag--tagged">Tagged</span>'
+              : image.featured
+                ? '<span class="ed-tile__flag">Listing</span>'
+                : "");
+          tile.addEventListener("click", function () {
+            state.active = image.id;
+            photo.src = image.src;
+            photo.alt = image.alt;
+            buildStrip(); render();
+          });
+          tile.querySelector(".ed-tile__check").addEventListener("click", function (e) {
+            e.stopPropagation();
+            image.sel = !image.sel;
+            buildStrip(); render();
+          });
+          strip.appendChild(tile);
+        });
+      }
+
+      document.getElementById("applysel").addEventListener("click", function () {
+        IMAGES.forEach(function (i) {
+          if (i.sel) i.own = { x: state.x, y: state.y, h: state.h,
+                               type: state.type, style: state.style };
+        });
+      });
+
+      document.getElementById("applyone").addEventListener("click", function () {
+        var img = IMAGES.filter(function (i) { return i.id === state.active; })[0];
+        if (img) img.own = { x: state.x, y: state.y, h: state.h,
+                             type: state.type, style: state.style };
+      });
+
+      buildStrip();
+      render();
+    </script>
+    <script src="nav.js"></script>
+  </body>
+</html>

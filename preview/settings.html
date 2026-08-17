@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Settings — AI Disclosure preview</title>
+    <script src="https://cdn.shopify.com/shopifycloud/polaris.js"></script>
+    <link rel="stylesheet" href="preview.css" />
+  </head>
+  <body>
+    <div class="pv-wrap">
+      <s-page heading="Settings">
+        <s-section heading="Compliance posture">
+          <s-stack direction="block" gap="base">
+            <s-switch
+              label="Label unresolved images provisionally"
+              details="Shows the generic 'AI' label on images whose origin has not been established, until you declare them. Over-labelling carries no penalty; under-labelling can cost up to €15 million or 3% of worldwide turnover."
+              checked
+            ></s-switch>
+            <s-switch
+              label="Label AI content created before 2 August 2026"
+              details="The Commission does not require retroactive labelling of content generated before Article 50 applied, but encourages it. Off by default."
+            ></s-switch>
+            <s-switch
+              label="Show labels to EU and EEA visitors only"
+              details="The obligation is territorial. Leaving this off shows labels to everyone, which is simpler and cannot under-disclose."
+            ></s-switch>
+          </s-stack>
+        </s-section>
+
+        <s-section heading="Storefront appearance">
+          <s-stack direction="block" gap="base">
+            <s-select
+              label="Badge style"
+              details="The official EU label artwork. Pick the variant that reads clearly against your product photography."
+              value="black_transparent"
+            >
+              <s-option value="black_transparent">
+                Black, transparent background
+              </s-option>
+              <s-option value="white_transparent">
+                White, transparent background
+              </s-option>
+              <s-option value="black">Black, solid background</s-option>
+              <s-option value="white">White, solid background</s-option>
+            </s-select>
+
+            <s-select label="Badge position" value="bottom_left">
+              <s-option value="bottom_left">Bottom left</s-option>
+              <s-option value="bottom_right">Bottom right</s-option>
+              <s-option value="top_left">Top left</s-option>
+              <s-option value="top_right">Top right</s-option>
+            </s-select>
+
+            <s-select label="Badge size" value="medium">
+              <s-option value="small">Small</s-option>
+              <s-option value="medium">Medium</s-option>
+              <s-option value="large">Large</s-option>
+            </s-select>
+
+            <s-switch
+              label="Also show a text notice"
+              details="A visible caption alongside the badge. The AI Act requires disclosure to be perceivable without special tools, and text is the most robust way to meet that."
+              checked
+            ></s-switch>
+
+            <s-text-field
+              label="Notice text"
+              value="This image was created or edited using artificial intelligence."
+            ></s-text-field>
+          </s-stack>
+        </s-section>
+
+        <s-section>
+          <s-button variant="primary">Save settings</s-button>
+        </s-section>
+      </s-page>
+    </div>
+    <script src="nav.js"></script>
+  </body>
+</html>

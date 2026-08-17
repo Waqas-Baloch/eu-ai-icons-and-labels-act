@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Storefront — AI Disclosure preview</title>
+    <link rel="stylesheet" href="preview.css" />
+    <!--
+      This page loads the REAL extension stylesheet and overlay script, not a
+      mockup. What renders below is what the theme extension actually produces,
+      including the 20px keep-out and the per-image free placement and style
+      overrides. If the overlay logic breaks, this page breaks with it.
+    -->
+    <link rel="stylesheet" href="eu-ai-disclosure.css" />
+  </head>
+  <body>
+    <div class="pv-wrap">
+      <p style="font-size: 0.8125rem; color: #616161">
+        Rendered by the real
+        <code>eu-ai-disclosure.js</code> and <code>eu-ai-disclosure.css</code>
+        from the theme extension, driven by the same metafield payload the app
+        publishes.
+      </p>
+
+      <div class="sf-page">
+        <div class="sf-grid">
+          <div>
+            <img
+              class="sf-main-img"
+              src="samples/carrots.png"
+              alt="Fresh Carrots — 1kg"
+            />
+            <div class="sf-thumbs">
+              <img src="samples/carrots.png" alt="Canvas tote front" />
+              <img src="samples/mug.svg" alt="Styled with mug" />
+              <img src="samples/lamp.svg" alt="Lifestyle shot" />
+              <img src="samples/chair.svg" alt="In context" />
+            </div>
+          </div>
+
+          <div>
+            <h1 class="sf-title">Fresh Carrots — 1kg</h1>
+            <p class="sf-price">£48.00</p>
+
+            <!-- The server-rendered app block: present in the HTML, no JS. -->
+            <div class="eu-ai-disclosure">
+              <span class="eu-ai-badge eu-ai-badge--medium" role="img" aria-label="AI generated">
+                <img
+                  class="eu-ai-badge__img"
+                  src="badges/eu-ai-generated-black.png"
+                  alt="AI generated"
+                />
+              </span>
+              <p class="eu-ai-disclosure__text">
+                This image was created or edited using artificial intelligence.
+              </p>
+            </div>
+
+            <button class="sf-buy">Add to cart</button>
+
+            <p style="font-size: 0.8125rem; color: #616161; margin-top: 18px">
+              Heavyweight cotton canvas with reinforced handles. Roomy enough for
+              a laptop and a week&rsquo;s groceries.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!--
+      The payload below matches what publishProductDecision() writes to the
+      eu_ai_act.images metafield: decisions keyed by filename, with optional
+      per-image corner and style overrides. Note each image uses a different
+      corner, to show the override working.
+    -->
+    <script type="application/json" id="eu-ai-act-disclosure-data">
+      {
+        "state": "required",
+        "images": {
+          "byId": {},
+          "byFile": {
+            "carrots.png": {
+              "state": "required",
+              "label": "ai_generated",
+              "provisional": false,
+              "style": "black_transparent",
+              "x": 0.5,
+              "y": 0.5,
+              "h": 6
+            },
+            "mug.svg": {
+              "state": "required",
+              "label": "ai_modified",
+              "provisional": false,
+              "style": "black_transparent",
+              "x": 1,
+              "y": 0,
+              "h": 8
+            },
+            "lamp.svg": {
+              "state": "unknown",
+              "label": "ai",
+              "provisional": true,
+              "style": "black_transparent",
+              "x": 0,
+              "y": 1,
+              "h": 10
+            },
+            "chair.svg": {
+              "state": "not_required",
+              "label": "none",
+              "provisional": false
+            }
+          }
+        },
+        "style": "black_transparent",
+        "size": "medium",
+        "placement": "bottom_left",
+        "assets": {
+          "ai_generated": {
+            "black_transparent": "badges/eu-ai-generated-black.png",
+            "white_transparent": "badges/eu-ai-generated-white.png",
+            "black": "badges/eu-ai-generated-black-solid.png",
+            "white": "badges/eu-ai-generated-white-solid.png"
+          },
+          "ai_modified": {
+            "black_transparent": "badges/eu-ai-modified-black.png",
+            "white_transparent": "badges/eu-ai-modified-white.png",
+            "black": "badges/eu-ai-modified-black-solid.png",
+            "white": "badges/eu-ai-modified-white-solid.png"
+          },
+          "ai": {
+            "black_transparent": "badges/eu-ai-black.png",
+            "white_transparent": "badges/eu-ai-white.png",
+            "black": "badges/eu-ai-black-solid.png",
+            "white": "badges/eu-ai-white-solid.png"
+          }
+        }
+      }
+    </script>
+
+    <script src="eu-ai-disclosure.js" defer></script>
+    <script src="nav.js"></script>
+  </body>
+</html>

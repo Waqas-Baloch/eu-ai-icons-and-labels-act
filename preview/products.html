@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Products — AI Disclosure preview</title>
+    <script src="https://cdn.shopify.com/shopifycloud/polaris.js"></script>
+    <link rel="stylesheet" href="preview.css" />
+  </head>
+  <body>
+    <div class="pv-wrap">
+      <s-page heading="Products">
+        <s-section>
+          <s-stack direction="inline" gap="base" alignItems="center">
+            <s-badge tone="critical">6 products need review</s-badge>
+            <s-text color="subdued">627 of 641 images resolved (98%)</s-text>
+            <s-button variant="tertiary" icon="shield-check-mark">Audit trail</s-button>
+            <s-button variant="tertiary">Rescan</s-button>
+          </s-stack>
+        </s-section>
+
+        <s-section>
+          <s-stack direction="block" gap="base">
+            <s-stack direction="inline" gap="small" alignItems="center">
+              <s-button variant="primary">All products</s-button>
+              <s-button variant="tertiary">Needs review</s-button>
+              <s-button variant="tertiary">Labelled</s-button>
+              <s-button variant="tertiary">No label needed</s-button>
+            </s-stack>
+            <s-stack direction="inline" gap="small" alignItems="end">
+              <s-search-field label="Search products" placeholder="Search by title"></s-search-field>
+              <s-button>Search</s-button>
+            </s-stack>
+          </s-stack>
+        </s-section>
+
+        <s-section>
+          <s-table>
+            <s-table-header-row>
+              <s-table-header>Product</s-table-header>
+              <s-table-header>Images</s-table-header>
+              <s-table-header>Status</s-table-header>
+              <s-table-header></s-table-header>
+            </s-table-header-row>
+            <s-table-body id="rows"></s-table-body>
+          </s-table>
+        </s-section>
+
+        <s-section>
+          <s-stack direction="inline" gap="base" alignItems="center">
+            <s-text>Page 1 of 9 · 207 products</s-text>
+            <s-button icon="chevron-right">Next</s-button>
+          </s-stack>
+        </s-section>
+      </s-page>
+    </div>
+
+    <script>
+      var ROWS = [
+        ["samples/carrots.png", "Fresh Carrots — 1kg", "3", "2 to review", "critical", "Needs review"],
+        ["samples/mug.svg", "Ceramic Mug — Terracotta", "4", "1 to review", "critical", "Needs review"],
+        ["samples/lamp.svg", "Desk Lamp — Charcoal", "5", "", "warning", "Disclosure required"],
+        ["samples/chair.svg", "Lounge Chair — Sage", "6", "", "success", "No disclosure needed"],
+        ["samples/chair.svg", "Weekend Duffel — Olive", "3", "", "success", "No disclosure needed"],
+        ["samples/mug.svg", "Espresso Cup Set", "2", "", "info", "Reduced disclosure"],
+      ];
+
+      var body = document.getElementById("rows");
+      ROWS.forEach(function (r) {
+        var row = document.createElement("s-table-row");
+        row.innerHTML =
+          "<s-table-cell>" +
+          '<s-stack direction="inline" gap="small" alignItems="center">' +
+          '<s-thumbnail src="' + r[0] + '" alt="' + r[1] + '" size="base"></s-thumbnail>' +
+          "<s-text>" + r[1] + "</s-text>" +
+          "</s-stack></s-table-cell>" +
+          "<s-table-cell>" + r[2] + (r[3] ? " · " + r[3] : "") + "</s-table-cell>" +
+          '<s-table-cell><s-badge tone="' + r[4] + '">' + r[5] + "</s-badge></s-table-cell>" +
+          '<s-table-cell><s-button variant="tertiary" icon="chevron-right" href="product.html">Open</s-button></s-table-cell>';
+        body.appendChild(row);
+      });
+    </script>
+    <script src="nav.js"></script>
+  </body>
+</html>

@@ -1,0 +1,45 @@
+# Render Blueprint.
+#
+# Render's own free Postgres expires after 90 days, which is a poor home for an
+# audit chain merchants may need years later — so the database lives on Neon
+# instead, whose free tier does not expire. DATABASE_URL is set manually in the
+# Render dashboard rather than wired here.
+#
+# The free web service sleeps after 15 minutes idle and cold-starts in roughly
+# a minute. Fine for review and testing; see docs/DEPLOY.md before real
+# merchants install, because a sleeping service also delays webhooks.
+
+services:
+  - type: web
+    name: eu-ai-labels
+    runtime: docker
+    plan: free
+    region: frankfurt
+    branch: main
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: SCOPES
+        value: read_products,write_products
+      # Real charges. Anything other than "0" keeps Shopify billing in test
+      # mode, where subscriptions are approved but never billed.
+      - key: SHOPIFY_BILLING_TEST
+        value: "0"
+      # Set these in the dashboard — never commit them.
+      - key: SHOPIFY_API_KEY
+        sync: false
+      - key: SHOPIFY_API_SECRET
+        sync: false
+      - key: SHOPIFY_APP_URL
+        sync: false
+      # Pooled Neon connection — the running app.
+      - key: DATABASE_URL
+        sync: false
+      # Unpooled Neon connection. Needed because the container runs
+      # `prisma migrate deploy` on boot, and Migrate's advisory locks and DDL
+      # do not survive a transaction-mode pooler.
+      - key: DIRECT_URL
+        sync: false

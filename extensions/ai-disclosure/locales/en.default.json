@@ -1,0 +1,8 @@
+{
+  "general": {
+    "ai_generated": "AI generated",
+    "ai_modified": "AI modified",
+    "ai_content": "Contains AI generated content",
+    "default_notice": "This image was created or edited using artificial intelligence."
+  }
+}

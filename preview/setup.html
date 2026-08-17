@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Setup — AI Disclosure preview</title>
+    <script src="https://cdn.shopify.com/shopifycloud/polaris.js"></script>
+    <link rel="stylesheet" href="preview.css" />
+  </head>
+  <body>
+    <div class="pv-wrap">
+      <s-page heading="Set up AI disclosure">
+        <s-section>
+          <s-stack direction="inline" gap="small" alignItems="center">
+            <s-badge tone="success" icon="check">1. How this app works</s-badge>
+            <s-badge tone="success" icon="check">2. Scan your catalog</s-badge>
+            <s-badge tone="info">3. Choose your posture</s-badge>
+            <s-badge tone="neutral">4. Pick the badge look</s-badge>
+            <s-badge tone="neutral">5. Turn on the storefront label</s-badge>
+          </s-stack>
+          <s-paragraph><s-text color="subdued">Step 3 of 5</s-text></s-paragraph>
+        </s-section>
+
+        <s-section heading="Choose your posture">
+          <s-stack direction="block" gap="base">
+            <s-paragraph>
+              Found 207 products, 39 images that may need a label.
+            </s-paragraph>
+            <s-switch
+              label="Label unresolved images provisionally"
+              details="Shows the generic 'AI' mark on images whose origin is not yet established. Over-labelling carries no penalty; under-labelling can cost up to €15 million or 3% of worldwide turnover. Recommended."
+              checked
+            ></s-switch>
+            <s-switch
+              label="Also label AI content created before 2 August 2026"
+              details="The Commission does not require retroactive labelling but encourages it. Off by default."
+            ></s-switch>
+            <s-button variant="primary">Continue</s-button>
+          </s-stack>
+        </s-section>
+
+        <s-section heading="Step 1 looked like this">
+          <s-stack direction="block" gap="base">
+            <s-paragraph>
+              From 2 August 2026, Article 50(4) of the EU AI Act requires you to
+              disclose AI-generated or AI-manipulated images that could pass for
+              real photographs. Penalties reach €15 million or 3% of worldwide
+              turnover, and they fall on you as the deployer — not on Shopify, and
+              not on this app.
+            </s-paragraph>
+            <s-banner tone="warning" heading="What it is not">
+              <s-paragraph>
+                It is <s-text type="strong">not legal advice</s-text> and it does
+                not guarantee compliance. Whether an image resembles something real
+                and would pass as authentic is a judgement only you can make. The
+                app records your judgement; it does not replace it.
+              </s-paragraph>
+            </s-banner>
+          </s-stack>
+        </s-section>
+      </s-page>
+    </div>
+    <script src="nav.js"></script>
+  </body>
+</html>

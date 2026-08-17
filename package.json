@@ -1,0 +1,51 @@
+{
+  "name": "eu-ai-icons-and-labels-act",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Shopify app that labels AI-generated product images with the official EU marks for the AI Act's Article 50(4) transparency obligation. Compliance tooling and audit records \u2014 not legal advice, and not affiliated with or endorsed by the European Union.",
+  "scripts": {
+    "build": "remix vite:build",
+    "dev": "shopify app dev",
+    "config:link": "shopify app config link",
+    "deploy": "shopify app deploy",
+    "start": "remix-serve ./build/server/index.js",
+    "setup": "prisma generate && prisma migrate deploy",
+    "prisma": "prisma",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "preview": "node scripts/sync-preview.mjs && npx --yes http-server preview -p 8791 -c-1 -o /products.html",
+    "preview:sync": "node scripts/sync-preview.mjs",
+    "docker-start": "prisma migrate deploy && npm run start"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "@remix-run/node": "^2.17.5",
+    "@remix-run/react": "^2.17.5",
+    "@remix-run/serve": "^2.17.5",
+    "@shopify/app-bridge-react": "^4.2.12",
+    "@shopify/shopify-app-remix": "^5.0.0",
+    "@shopify/shopify-app-session-storage-prisma": "^10.0.0",
+    "isbot": "^5.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@remix-run/dev": "^2.17.5",
+    "@shopify/cli": "^4.6.1",
+    "@shopify/polaris-types": "^1.0.7",
+    "@types/node": "^22.13.1",
+    "@types/react": "^18.2.31",
+    "@types/react-dom": "^18.2.14",
+    "prisma": "^6.19.3",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.0.5"
+  },
+  "engines": {
+    "node": "^18.20 || ^20.10 || >=21.0.0"
+  },
+  "author": "Waqas Baloch"
+}

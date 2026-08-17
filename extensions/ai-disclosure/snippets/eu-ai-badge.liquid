@@ -1,0 +1,80 @@
+{% comment %}
+  Renders one official EU AI content label.
+
+  Parameters:
+    variant   - ai_generated | ai_modified | ai | none
+    style     - black | white | black_solid | white_solid
+    size      - small | medium | large
+    placement - overlay position class suffix, or blank for inline
+    notice    - optional text shown next to the badge
+
+  The <img> carries the disclosure in its alt text as well as visually. The
+  obligation is that a person perceives the disclosure at first exposure, and a
+  customer using a screen reader is no less entitled to that.
+{% endcomment %}
+
+{%- liquid
+  assign v = variant | default: 'none'
+  assign s = style | default: 'black'
+
+  comment
+    Intrinsic pixel dimensions of each artwork, so the browser can reserve the
+    right box before the image loads. Theme Check requires width and height on
+    every img, and without them the badge causes a layout shift on the product
+    page. These match the files produced by scripts/prepare-badges.py — update
+    both together if the artwork is regenerated at a different height.
+  endcomment
+  case v
+    when 'ai_generated'
+      assign base = 'eu-ai-generated'
+      assign alt_text = 'AI generated'
+      assign art_w = 1045
+      assign art_h = 200
+    when 'ai_modified'
+      assign base = 'eu-ai-modified'
+      assign alt_text = 'AI modified'
+      assign art_w = 918
+      assign art_h = 200
+    when 'ai'
+      assign base = 'eu-ai'
+      assign alt_text = 'Contains AI generated content'
+      assign art_w = 200
+      assign art_h = 200
+    else
+      assign base = blank
+  endcase
+
+  case s
+    when 'white_transparent'
+      assign suffix = 'white'
+    when 'black'
+      assign suffix = 'black-solid'
+    when 'white'
+      assign suffix = 'white-solid'
+    else
+      assign suffix = 'black'
+  endcase
+
+  assign asset_name = base | append: '-' | append: suffix | append: '.png'
+-%}
+
+{%- if base != blank -%}
+  <span
+    class="eu-ai-badge eu-ai-badge--{{ size | default: 'medium' }}{% if placement != blank %} eu-ai-badge--overlay eu-ai-badge--{{ placement | replace: '_', '-' }}{% endif %}"
+    role="img"
+    aria-label="{{ alt_text }}"
+  >
+    <img
+      src="{{ asset_name | asset_url }}"
+      alt="{{ alt_text }}"
+      class="eu-ai-badge__img"
+      width="{{ art_w }}"
+      height="{{ art_h }}"
+      loading="lazy"
+      decoding="async"
+    >
+    {%- if notice != blank -%}
+      <span class="eu-ai-badge__notice">{{ notice }}</span>
+    {%- endif -%}
+  </span>
+{%- endif -%}

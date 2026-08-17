@@ -1,0 +1,246 @@
+// EU AI Act Article 50(4) disclosure tooling.
+//
+// Enums are modelled as String rather than Prisma enums. That started as a
+// SQLite constraint and is kept deliberately: the allowed values live in
+// app/lib/compliance/types.ts as TS unions, and a schema migration every time
+// a vocabulary term is added would be friction for no safety gain.
+//
+// Postgres, not SQLite: SQLite lives on the container filesystem, which most
+// hosts wipe on deploy. Losing that database means losing the audit chain —
+// the one thing a merchant cannot reconstruct, and the thing the product's
+// value rests on.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Pooled connection for the running app: each instance holds connections
+  // open, and the pooler is what stops that exhausting the server's limit.
+  url       = env("DATABASE_URL")
+  // Direct connection for migrations. Prisma Migrate takes advisory locks and
+  // runs DDL in a session, neither of which survives a transaction-mode
+  // pooler, so it needs a route that bypasses it.
+  directUrl = env("DIRECT_URL")
+}
+
+// Shape required by @shopify/shopify-app-session-storage-prisma.
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+}
+
+model Shop {
+  domain    String   @id
+  installedAt DateTime @default(now())
+  uninstalledAt DateTime?
+
+  // Billing
+  plan            String   @default("none") // none | starter | growth | scale
+  subscriptionId  String?
+  trialEndsAt     DateTime?
+
+  // Merchant-visible acknowledgement that this is advisory tooling, captured
+  // once at onboarding and recorded in the audit chain.
+  disclaimerAcceptedAt DateTime?
+  disclaimerAcceptedBy String?
+  // Which version of the terms was accepted. A merchant who accepted older
+  // wording is re-prompted rather than carried over silently.
+  termsVersion         String?
+
+  // Guided setup. Steps are named rather than numbered in the UI, but stored
+  // as an index so the wizard can resume where the merchant left off.
+  onboardingStep        Int       @default(0)
+  onboardingCompletedAt DateTime?
+  // Set once the merchant confirms they enabled the theme extension. We cannot
+  // detect this reliably from the Admin API, so it is self-reported.
+  themeActivatedAt      DateTime?
+
+  settings  Settings?
+  products  ProductAssessment[]
+  images    ImageAssessment[]
+  audit     AuditEntry[]
+  scans     ScanRun[]
+}
+
+model Settings {
+  shopDomain String @id
+  shop       Shop   @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
+
+  // Storefront presentation
+  badgeVariant   String  @default("black") // black | white | black_transparent | white_transparent
+  badgePlacement String  @default("bottom_left")       // top_left | top_right | bottom_left | bottom_right
+  badgeSize      String  @default("medium")            // small | medium | large
+  showTextNotice Boolean @default(true)
+  noticeText     String  @default("This image was created or edited using artificial intelligence.")
+
+  // Compliance posture
+  // When true, an image whose origin is unknown is presented on the storefront
+  // as if disclosure were required until the merchant declares otherwise.
+  conservativeDefault Boolean @default(true)
+  // Label AI content created before 2 Aug 2026 even though the Commission does
+  // not require retroactive labelling. Off by default.
+  labelPreCutoffContent Boolean @default(false)
+  // Restrict badge rendering to EU/EEA visitors only.
+  euOnlyRendering Boolean @default(false)
+
+  updatedAt DateTime @updatedAt
+}
+
+model ProductAssessment {
+  id         String @id @default(cuid())
+  shopDomain String
+  shop       Shop   @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
+
+  productId    String // gid://shopify/Product/123
+  title        String
+  handle       String
+  status       String @default("active")
+
+  // Rolled up from the product's images: the strictest state across them.
+  disclosureState String @default("unknown")
+  labelVariant    String @default("none")
+  needsReview     Boolean @default(true)
+
+  lastAssessedAt DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  images ImageAssessment[]
+
+  @@unique([shopDomain, productId])
+  @@index([shopDomain, needsReview])
+  @@index([shopDomain, disclosureState])
+}
+
+model ImageAssessment {
+  id         String @id @default(cuid())
+  shopDomain String
+  shop       Shop   @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
+
+  productAssessmentId String
+  product             ProductAssessment @relation(fields: [productAssessmentId], references: [id], onDelete: Cascade)
+
+  imageId  String // gid://shopify/MediaImage/123
+  imageUrl String
+  altText  String?
+  width    Int?
+  height   Int?
+
+  // Order within the product's media, so the admin shows images in the same
+  // sequence a customer sees them on the product page.
+  position Int @default(0)
+  // The listing image — the one shown in collections, search and social
+  // previews. It is the image most customers see first, which is exactly where
+  // "disclosure at first exposure" bites hardest.
+  isFeatured Boolean @default(false)
+
+  // sha256 of the image bytes. Dedupes the same asset reused across products
+  // so a merchant declares each distinct image exactly once.
+  contentHash String?
+
+  // --- What the machine found -------------------------------------------
+  provenanceSource String  @default("none") // c2pa | iptc | xmp | exif | none
+  detectedOrigin   String  @default("unknown") // ai_generated | ai_modified | not_ai | unknown
+  generatorName    String?
+  contentCreatedAt DateTime?
+  provenanceRaw    String? // JSON blob of the raw findings, kept for evidence
+
+  // --- What the merchant declared ---------------------------------------
+  declaredOrigin  String? // ai_generated | ai_modified | not_ai
+  declaredRealism String? // realistic | stylised | fantastical
+  declaredContext String? // commercial | artistic
+  declaredNote    String?
+  declaredAt      DateTime?
+  declaredBy      String?
+
+  // --- The resulting decision -------------------------------------------
+  disclosureState String @default("unknown") // required | reduced | not_required | unknown
+  labelVariant    String @default("none")    // ai_generated | ai_modified | ai | none
+  reasoning       String @default("[]")      // JSON array of ReasoningStep
+  engineVersion   String @default("0.0.0")
+  assessedAt      DateTime @default(now())
+
+  // --- Per-image badge presentation -------------------------------------
+  // All null by default, meaning "inherit the shop setting". Only stored when
+  // the merchant deliberately overrides this image.
+  badgeCorner String? // legacy preset; superseded by badgeX/badgeY
+  badgeStyle  String? // black_transparent | white_transparent | black | white
+
+  // Free placement. badgeX/badgeY are fractions of the safe area (0 = against
+  // the 20px margin on one side, 1 = against the opposite margin), so the
+  // position survives any rendered image size. badgeHeightPct sizes the badge
+  // against the image height. See app/lib/badge-layout.ts.
+  badgeX         Float?
+  badgeY         Float?
+  badgeHeightPct Float?
+
+  // A deliberate override of which official label is shown. Unlike corner and
+  // style this is substantive rather than cosmetic — it changes what is
+  // disclosed — so it is audited separately and shown as an override in the UI.
+  labelOverride   String? // ai_generated | ai_modified | ai
+  labelOverrideBy String?
+  labelOverrideAt DateTime?
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([shopDomain, imageId])
+  @@index([shopDomain, disclosureState])
+  @@index([shopDomain, contentHash])
+  @@index([productAssessmentId, position])
+}
+
+// Append-only, hash-chained record of every assessment and every merchant
+// decision. `seq` is per shop and contiguous; `hash` covers `prevHash` so any
+// edit or deletion downstream of a tampered row is detectable.
+model AuditEntry {
+  id         String @id @default(cuid())
+  shopDomain String
+  shop       Shop   @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
+
+  seq      Int
+  prevHash String
+  hash     String
+
+  action    String // scan.started | image.assessed | image.declared | settings.changed | ...
+  actor     String // system | merchant email | shopify webhook
+  subject   String? // gid of the product/image the entry concerns
+  payload   String  // canonical JSON
+
+  createdAt DateTime @default(now())
+
+  @@unique([shopDomain, seq])
+  @@index([shopDomain, createdAt])
+  @@index([shopDomain, subject])
+}
+
+model ScanRun {
+  id         String @id @default(cuid())
+  shopDomain String
+  shop       Shop   @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
+
+  status      String   @default("running") // running | completed | failed
+  trigger     String   @default("manual")  // manual | install | webhook
+  productsSeen Int     @default(0)
+  imagesSeen   Int     @default(0)
+  imagesFlagged Int    @default(0)
+  error       String?
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@index([shopDomain, startedAt])
+}

@@ -1,0 +1,106 @@
+{% comment %}
+  App block — the merchant drags this into their product template.
+
+  This is the reliable disclosure path: it renders server-side in Liquid, so it
+  is present in the HTML at first paint with no JavaScript involved. The
+  Commission's guidance is that disclosure must be perceivable by a person on
+  first exposure without special tools, and a server-rendered notice next to the
+  product imagery is the most defensible way to meet that.
+
+  The overlay app embed is a convenience on top of this, not a substitute.
+{% endcomment %}
+
+{{ 'eu-ai-disclosure.css' | asset_url | stylesheet_tag }}
+
+{%- liquid
+  assign state = product.metafields.eu_ai_act.state.value
+  assign label = product.metafields.eu_ai_act.label.value
+  assign show = false
+
+  if state == 'required' or state == 'reduced'
+    assign show = true
+  endif
+
+  comment
+    An unresolved image is shown when the merchant has opted to label
+    provisionally — the app only writes a label variant in that case.
+  endcomment
+  if state == 'unknown' and label != 'none' and label != blank
+    assign show = true
+  endif
+
+  if block.settings.hide_when_reduced and state == 'reduced'
+    assign show = false
+  endif
+-%}
+
+{%- if show -%}
+  <div class="eu-ai-disclosure" {{ block.shopify_attributes }}>
+    {%- render 'eu-ai-badge',
+      variant: label,
+      style: block.settings.badge_style,
+      size: block.settings.badge_size
+    -%}
+    {%- if block.settings.show_text -%}
+      <p class="eu-ai-disclosure__text">
+        {{- block.settings.notice_text -}}
+      </p>
+    {%- endif -%}
+  </div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "AI content disclosure",
+  "target": "section",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "Shows the official EU AI content label when this product's imagery has been assessed as needing disclosure under Article 50(4). Nothing renders on products that do not need it."
+    },
+    {
+      "type": "select",
+      "id": "badge_style",
+      "label": "Badge style",
+      "default": "black",
+      "options": [
+        { "value": "black", "label": "Black — solid (recommended)" },
+        { "value": "white", "label": "White — solid" },
+        { "value": "black_transparent", "label": "Black — translucent" },
+        { "value": "white_transparent", "label": "White — translucent" }
+      ]
+    },
+    {
+      "type": "select",
+      "id": "badge_size",
+      "label": "Badge size",
+      "default": "medium",
+      "options": [
+        { "value": "small", "label": "Small" },
+        { "value": "medium", "label": "Medium" },
+        { "value": "large", "label": "Large" }
+      ]
+    },
+    {
+      "type": "checkbox",
+      "id": "show_text",
+      "label": "Show text notice",
+      "default": true,
+      "info": "A written notice is the most robust way to meet the requirement that disclosure be understandable without special tools."
+    },
+    {
+      "type": "text",
+      "id": "notice_text",
+      "label": "Notice text",
+      "default": "This image was created or edited using artificial intelligence."
+    },
+    {
+      "type": "checkbox",
+      "id": "hide_when_reduced",
+      "label": "Hide on creative works",
+      "default": false,
+      "info": "Images you declared as part of an evidently artistic work carry a reduced obligation. Only enable this if you disclose those another way."
+    }
+  ]
+}
+{% endschema %}
