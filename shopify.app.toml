@@ -9,7 +9,7 @@
 client_id = "3a33e7dcdab270dc87e7ba74c8bd53f9"
 name = "EU - AI Icons and Labels Act"
 handle = "eu-ai-icons-and-labels-act"
-application_url = "https://shopify.dev/apps/default-app-home"
+application_url = "https://eu-ai-labels.onrender.com"
 embedded = true
 
 [access_scopes]
@@ -18,7 +18,11 @@ embedded = true
 scopes = "read_products,write_products"
 
 [auth]
-redirect_urls = [ "https://shopify.dev/apps/default-app-home/api/auth" ]
+redirect_urls = [
+  "https://eu-ai-labels.onrender.com/auth/callback",
+  "https://eu-ai-labels.onrender.com/auth/shopify/callback",
+  "https://eu-ai-labels.onrender.com/api/auth/callback",
+]
 
 [webhooks]
 # Pinned to the current stable version, matching ApiVersion.July26 in
@@ -54,5 +58,4 @@ api_version = "2026-07"
 embedded = false
 
 [build]
-include_config_on_deploy = true
-automatically_update_urls_on_dev = true
+automatically_update_urls_on_dev = false
