@@ -71,9 +71,23 @@ export function useLiveFieldValue(
  * Tracks whether one named checkbox is ticked, for gating an action on it.
  *
  * The checked counterpart of useLiveFieldValue, and capture-phase for the same
- * reasons: React 18 does not forward a custom element's events to `onChange`,
- * and capture also catches events that do not bubble, since capture runs from
- * the root down to the target either way.
+ * reason: React 18 does not forward a custom element's events to `onChange`.
+ *
+ * Unlike that hook this one listens to `change` ONLY, never `input`. Measured
+ * against the real s-checkbox from Shopify's CDN, `input` fires first carrying
+ * the value from *before* the toggle:
+ *
+ *   ticking    input -> checked false, then change -> checked true
+ *   unticking  input -> checked true,  then change -> checked false
+ *
+ * Handling both happens to end on the right value only because change fires
+ * second. Listening to change alone is correct rather than accidentally
+ * correct. (For a text field `input` is the live value, which is why the value
+ * hook does want it — the two are not interchangeable.)
+ *
+ * Polaris dispatches change on the host element, so it reaches a listener on
+ * an ancestor even though change is composed: false and would not otherwise
+ * escape a shadow root.
  */
 export function useLiveFieldChecked(
   containerRef: RefObject<HTMLElement | null>,
@@ -98,11 +112,7 @@ export function useLiveFieldChecked(
     };
 
     root.addEventListener("change", handler, true);
-    root.addEventListener("input", handler, true);
-    return () => {
-      root.removeEventListener("change", handler, true);
-      root.removeEventListener("input", handler, true);
-    };
+    return () => root.removeEventListener("change", handler, true);
   }, [containerRef, name]);
 
   return checked;
