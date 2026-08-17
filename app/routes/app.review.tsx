@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { redirect } from "@remix-run/node";
+import { redirectEmbedded } from "~/lib/embedded-redirect.server";
 
 /**
  * The review queue used to be its own page listing loose images. It is now the
@@ -9,6 +9,6 @@ import { redirect } from "@remix-run/node";
  * Kept as a redirect because the old path is linked from earlier notification
  * copy and from bookmarks.
  */
-export const loader = async (_args: LoaderFunctionArgs) => {
-  throw redirect("/app?filter=review");
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  throw redirectEmbedded(request, "/app?filter=review");
 };

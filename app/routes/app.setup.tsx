@@ -1,6 +1,5 @@
 import { useRef } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { redirect } from "@remix-run/node";
 import { Link, useFetcher, useLoaderData } from "@remix-run/react";
 
 import prisma from "~/db.server";
@@ -9,6 +8,7 @@ import { appendAudit } from "~/lib/audit.server";
 import { scanCatalog } from "~/lib/scan.server";
 import { collectFields } from "~/lib/polaris-form";
 import { useFieldValues } from "~/hooks/useFieldValues";
+import { redirectEmbedded } from "~/lib/embedded-redirect.server";
 
 /**
  * Guided setup.
@@ -41,7 +41,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }),
   ]);
 
-  if (shop?.onboardingCompletedAt) throw redirect("/app");
+  if (shop?.onboardingCompletedAt) throw redirectEmbedded(request, "/app");
 
   return {
     step: Math.min(shop?.onboardingStep ?? 0, STEPS.length - 1),
@@ -148,7 +148,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
       // Land on the products list filtered to what still needs answering —
       // the merchant finishes setup already looking at their next task.
-      throw redirect("/app?filter=review");
+      throw redirectEmbedded(request, "/app?filter=review");
     }
 
     case "back": {

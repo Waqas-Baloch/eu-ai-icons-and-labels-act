@@ -1,5 +1,4 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
-import { redirect } from "@remix-run/node";
 import { Link, Outlet, useLoaderData, useRouteError } from "@remix-run/react";
 import { NavMenu } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-remix/server";
@@ -9,6 +8,7 @@ import { authenticate } from "~/shopify.server";
 import { appendAudit } from "~/lib/audit.server";
 import { ensureMetafieldDefinitions } from "~/lib/metafields.server";
 import { TERMS_VERSION } from "~/lib/terms";
+import { redirectEmbedded } from "~/lib/embedded-redirect.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
@@ -60,7 +60,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const onTermsPage = url.pathname === "/app/terms";
   if (!onTermsPage && shop?.termsVersion !== TERMS_VERSION) {
-    throw redirect("/app/terms");
+    throw redirectEmbedded(request, "/app/terms");
   }
 
   const pendingReview = await prisma.imageAssessment.count({

@@ -1,5 +1,4 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { redirect } from "@remix-run/node";
 import { useFetcher, useLoaderData } from "@remix-run/react";
 
 import prisma from "~/db.server";
@@ -7,6 +6,7 @@ import { authenticate } from "~/shopify.server";
 import { appendAudit } from "~/lib/audit.server";
 import { TERMS, TERMS_ACKNOWLEDGEMENT, TERMS_VERSION } from "~/lib/terms";
 import { formatDateTime } from "~/lib/display";
+import { redirectEmbedded } from "~/lib/embedded-redirect.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -62,7 +62,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     },
   });
 
-  throw redirect("/app");
+  throw redirectEmbedded(request, "/app");
 };
 
 export default function Terms() {
