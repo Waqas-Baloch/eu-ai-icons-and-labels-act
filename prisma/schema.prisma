@@ -26,22 +26,30 @@ datasource db {
 }
 
 // Shape required by @shopify/shopify-app-session-storage-prisma.
+//
+// Copy this from that package's README verbatim rather than from memory. v10
+// writes `refreshToken` and `refreshTokenExpires`, and a model without them
+// fails at storeSession with "Unknown argument `refreshToken`" — which surfaces
+// as a blank "Application Error" on the merchant's first ever page load,
+// because it happens inside authenticate.admin() before anything can render.
 model Session {
-  id            String    @id
-  shop          String
-  state         String
-  isOnline      Boolean   @default(false)
-  scope         String?
-  expires       DateTime?
-  accessToken   String
-  userId        BigInt?
-  firstName     String?
-  lastName      String?
-  email         String?
-  accountOwner  Boolean   @default(false)
-  locale        String?
-  collaborator  Boolean?  @default(false)
-  emailVerified Boolean?  @default(false)
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean?
+  locale              String?
+  collaborator        Boolean?
+  emailVerified       Boolean?
+  refreshToken        String?
+  refreshTokenExpires DateTime?
 }
 
 model Shop {

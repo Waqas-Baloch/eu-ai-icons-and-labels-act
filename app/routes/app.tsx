@@ -31,7 +31,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       actor: "system",
       payload: { shop: shopDomain },
     });
-    await ensureMetafieldDefinitions(admin);
+
+    // Metafield definitions are a convenience, not a precondition: the
+    // storefront reads the metafield values whether or not a definition exists.
+    // Letting a failure here escape would turn a cosmetic problem into an app
+    // that will not open at all, on the merchant's very first visit.
+    try {
+      await ensureMetafieldDefinitions(admin);
+    } catch (error) {
+      console.error(
+        `[${shopDomain}] metafield definitions failed on install:`,
+        error instanceof Error ? error.message : error,
+      );
+    }
   } else if (!existing.settings) {
     await prisma.settings.create({ data: { shopDomain } });
   }
