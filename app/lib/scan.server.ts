@@ -199,6 +199,40 @@ export interface ScanResult {
 export const SCAN_TIME_BUDGET_MS = 20_000;
 
 /**
+ * Turns a thrown value into something a merchant can act on.
+ *
+ * The Shopify admin client throws the raw `Response` when a GraphQL call is
+ * rejected, and String(response) is "[object Response]" — which is exactly what
+ * was recorded for the first failures on this app, telling nobody anything.
+ * Reading the status and body back costs one await on a path that has already
+ * failed, and turns a dead end into a diagnosis.
+ */
+export async function describeScanError(error: unknown): Promise<string> {
+  if (error instanceof Response) {
+    let detail = "";
+    try {
+      detail = (await error.clone().text()).slice(0, 500);
+    } catch {
+      // Body already consumed or not readable; the status alone still helps.
+    }
+    const status = `Shopify returned ${error.status}${
+      error.statusText ? ` ${error.statusText}` : ""
+    }`;
+    // 401/403 here almost always means the granted scopes no longer cover the
+    // query, which a reinstall fixes and a retry does not.
+    const hint =
+      error.status === 401 || error.status === 403
+        ? " — the app may need reinstalling to regrant permissions"
+        : error.status === 429
+          ? " — rate limited; run the scan again in a minute"
+          : "";
+    return `${status}${hint}${detail ? `: ${detail}` : ""}`;
+  }
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+/**
  * Scans an entire catalog.
  *
  * Existing merchant declarations are preserved and re-applied: a rescan must
@@ -287,7 +321,7 @@ export async function scanCatalog(
 
     return { ...totals, scanRunId: scanRun.id };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = await describeScanError(error);
     await prisma.scanRun.update({
       where: { id: scanRun.id },
       data: { status: "failed", finishedAt: new Date(), error: message },

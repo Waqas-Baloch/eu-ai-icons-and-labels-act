@@ -40,6 +40,13 @@ const shopify = shopifyApp({
   },
   future: {
     unstable_newEmbeddedAuthStrategy: true,
+    // Not optional. Shopify no longer accepts non-expiring offline tokens on
+    // the Admin API — every call is rejected with "Non-expiring access tokens
+    // are no longer accepted", which surfaces as a thrown Response and killed
+    // the catalog scan outright. With this on, the library mints expiring
+    // tokens and refreshes them before they lapse, storing the refresh token in
+    // the Session columns of the same name.
+    expiringOfflineAccessTokens: true,
   },
   ...(process.env.SHOP_CUSTOM_DOMAIN
     ? { customShopDomains: [process.env.SHOP_CUSTOM_DOMAIN] }
