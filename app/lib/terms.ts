@@ -12,7 +12,7 @@
  * version is re-prompted, because an acceptance recorded against different
  * wording is not an acceptance of these terms.
  */
-export const TERMS_VERSION = "2026-08-16";
+export const TERMS_VERSION = "2026-08-18";
 
 export interface TermsClause {
   heading: string;
@@ -23,7 +23,7 @@ export const TERMS: TermsClause[] = [
   {
     heading: "We are not an official compliance partner",
     body: [
-      "EU AI Icons and Labels Act is an independent product. It is not affiliated with, authorised by, endorsed by, or certified by the European Union, the European Commission, any national market surveillance authority, or Shopify.",
+      "NanoApp Disclosa: EU AI Icons is an independent product. It is not affiliated with, authorised by, endorsed by, or certified by the European Union, the European Commission, any national market surveillance authority, or Shopify.",
       "The icon artwork it displays is published by the European Union for public use. Shipping that artwork does not make this app an official channel, and no part of this app should be read as an official statement of what the law requires of you.",
     ],
   },

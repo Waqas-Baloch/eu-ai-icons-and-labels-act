@@ -28,7 +28,7 @@ exist.
 
 ## Listing copy
 
-**Name** — `EU AI Icons and Labels Act` (26 characters; Shopify's limit is 30)
+**Name** — `NanoApp Disclosa: EU AI Icons` (29 characters; Shopify's limit is 30)
 
 **Tagline** — Label AI-generated product images with the official EU marks.
 
@@ -54,7 +54,7 @@ exist.
 - **Do not imply endorsement.** The listing must not suggest the app is
   official, certified, or a compliance guarantee. The disclaimer above belongs
   near the top of the description, not buried.
-- **Name risk.** "EU AI Icons and Labels Act" reads like the title of
+- **Name risk — resolved 18 Aug 2026.** The former name read like the title of
   legislation, and Shopify asks that names lead with a distinctive brand
   identifier rather than describing function. Reviewers may push back, and it
   sits awkwardly beside a terms of service that disclaims official status.

@@ -7,7 +7,7 @@
 # stops being re-assessed when a merchant swaps a photo.
 
 client_id = "3a33e7dcdab270dc87e7ba74c8bd53f9"
-name = "EU - AI Icons and Labels Act"
+name = "NanoApp Disclosa: EU AI Icons"
 handle = "eu-ai-icons-and-labels-act"
 application_url = "https://eu-ai-labels.onrender.com"
 embedded = true

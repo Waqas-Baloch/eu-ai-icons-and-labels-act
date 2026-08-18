@@ -1,0 +1,15 @@
+From 2 August 2026, Article 50(4) of the EU AI Act requires deployers to disclose AI-generated or AI-manipulated images that could pass for real photographs. If you sell into the EU and any of your product photography was made or retouched with AI, that duty applies to your storefront.
+
+This app finds those images, labels them with the European Commission's own artwork, and keeps a record of why each decision was made.
+
+It begins by scanning your catalogue and reading the provenance metadata embedded in every product image, including C2PA Content Credentials, IPTC, XMP and EXIF. Where that metadata establishes how an image was made, the app says so. Where it does not, the app asks you rather than guessing, because a missing marker is not evidence that an image is genuine, and silently treating it as such would under-disclose the very thing the regulation exists to surface.
+
+You then place the label. Tick the images that were made or edited with AI and the official mark appears immediately; untick one and it disappears. Choose which of the three official labels to apply, pick a solid or transparent treatment in black or white, drag it anywhere on the picture and scale it to suit. The label always keeps at least twenty pixels clear of every edge, so it never crowds the product. Set up your first image and the rest of the product inherits it, while each image stays independently adjustable.
+
+Labels reach your storefront through a theme app block, so nothing is hard-coded into your theme and removing the app leaves no trace. Once an image is labelled, the disclosure follows it wherever the image appears.
+
+Behind all of it sits a hash-chained audit trail. Every assessment, declaration and change is recorded with who made it and when, in a sequence where any later edit is detectable. You can export the whole record as CSV at any time, and it remains yours to keep.
+
+New products and replaced photographs are re-assessed automatically, because Article 50(4) is an ongoing obligation rather than a one-off cleanup.
+
+Independent product. Not affiliated with, endorsed by, or certified by the European Union. This app provides compliance tooling and audit records. It is not legal advice and it does not guarantee compliance.

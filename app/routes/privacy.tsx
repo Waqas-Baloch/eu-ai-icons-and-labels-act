@@ -12,11 +12,11 @@ import type { MetaFunction } from "@remix-run/node";
  */
 
 export const meta: MetaFunction = () => [
-  { title: "Privacy policy — EU AI Icons and Labels Act" },
+  { title: "Privacy policy — NanoApp Disclosa: EU AI Icons" },
   {
     name: "description",
     content:
-      "What the EU AI Icons and Labels Act app for Shopify reads, stores, and deletes.",
+      "What the NanoApp Disclosa: EU AI Icons app for Shopify reads, stores, and deletes.",
   },
 ];
 
@@ -37,7 +37,7 @@ export default function Privacy() {
         Privacy policy
       </h1>
       <p style={{ color: "#616161", marginTop: 0 }}>
-        EU AI Icons and Labels Act · last updated {UPDATED}
+        NanoApp Disclosa: EU AI Icons · last updated {UPDATED}
       </p>
 
       <h2>What this app is</h2>
