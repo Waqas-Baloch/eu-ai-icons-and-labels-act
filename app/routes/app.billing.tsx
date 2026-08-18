@@ -5,7 +5,13 @@ import prisma from "~/db.server";
 import { authenticate } from "~/shopify.server";
 import { appendAudit } from "~/lib/audit.server";
 import { isPlanName, PLANS, PLAN_DETAILS } from "~/lib/plans";
+import {
+  accessState,
+  shopifyTrialDaysFor,
+  trialDaysRemaining,
+} from "~/lib/entitlement";
 import { boolAttr } from "~/lib/polaris-form";
+import { formatDateTime } from "~/lib/display";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { billing, session } = await authenticate.admin(request);
@@ -20,11 +26,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     prisma.shop.findUnique({ where: { domain: session.shop } }),
   ]);
 
+  const now = new Date();
+  const trialDaysLeft = trialDaysRemaining(shop?.trialEndsAt, now);
+
   return {
     hasActivePayment: check.hasActivePayment,
     activePlans: check.appSubscriptions.map((subscription) => subscription.name),
     productCount,
     trialEndsAt: shop?.trialEndsAt?.toISOString() ?? null,
+    trialDaysLeft,
+    access: accessState({
+      trialEndsAt: shop?.trialEndsAt,
+      hasActivePayment: check.hasActivePayment,
+      now,
+    }),
   };
 };
 
@@ -47,11 +62,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     payload: { requestedPlan: plan },
   });
 
+  // Hand Shopify whatever is left of our own free week, so approving early
+  // costs the merchant nothing: the first charge still falls at the end of the
+  // week they were promised. Zero once the trial has run out, which bills on
+  // approval. The billing config's trialDays is 0 for the same reason — a
+  // standing 7 there would stack on top of this and give away fourteen days.
+  const shop = await prisma.shop.findUnique({ where: { domain: session.shop } });
+  const trialDays = shopifyTrialDaysFor(shop?.trialEndsAt, new Date());
+
   // Throws a redirect to Shopify's confirmation screen; the merchant approves
   // the charge there, and Shopify returns them to the app.
   await billing.request({
     plan,
     isTest: process.env.SHOPIFY_BILLING_TEST !== "0",
+    trialDays,
     returnUrl: `${process.env.SHOPIFY_APP_URL}/app/billing`,
   });
 
@@ -73,21 +97,44 @@ export default function Billing() {
 
   return (
     <s-page heading="Plan">
-      <s-section>
-        <s-text color="subdued">
-          {data.hasActivePayment
-            ? `Current plan: ${data.activePlans.join(", ")}`
-            : "No active subscription"}
-        </s-text>
-      </s-section>
+      {/*
+        Three states, three different things the merchant needs to know: how
+        long they have left, that they are paying, or what they have lost and
+        how to get it back.
+      */}
+      {data.access === "subscribed" && (
+        <s-section>
+          <s-text color="subdued">
+            Current plan: {data.activePlans.join(", ") || PLAN.name}
+          </s-text>
+        </s-section>
+      )}
 
-      {!data.hasActivePayment && (
-        <s-banner tone="info" heading={`${PLAN.trialDays}-day free trial`}>
+      {data.access === "trial" && (
+        <s-banner
+          tone={data.trialDaysLeft <= 2 ? "warning" : "info"}
+          heading={
+            data.trialDaysLeft === 1
+              ? "1 day left in your free trial"
+              : `${data.trialDaysLeft} days left in your free trial`
+          }
+        >
           <s-paragraph>
-            The trial is the full app, not a reduced version, and nothing is
-            charged until it ends. Article 50(4) is an ongoing obligation — new
-            products need assessing as you add them — so the app keeps working
-            in the background once set up.
+            No card needed until it ends
+            {data.trialEndsAt ? ` on ${formatDateTime(data.trialEndsAt)}` : ""}.
+            You have the full app, not a reduced version. Subscribing now does
+            not shorten the trial — your first charge still falls at the end of
+            it.
+          </s-paragraph>
+        </s-banner>
+      )}
+
+      {data.access === "locked" && (
+        <s-banner tone="critical" heading="Your free trial has ended">
+          <s-paragraph>
+            Subscribe to assess products and publish labels again. Two things
+            continue regardless: every label already on your storefront keeps
+            showing, and your audit trail stays readable and exportable.
           </s-paragraph>
         </s-banner>
       )}
@@ -130,7 +177,9 @@ export default function Billing() {
             >
               {busy
                 ? "Opening Shopify…"
-                : `Start ${PLAN.trialDays}-day free trial`}
+                : data.access === "trial"
+                  ? "Subscribe now"
+                  : "Subscribe"}
             </s-button>
           )}
         </s-stack>

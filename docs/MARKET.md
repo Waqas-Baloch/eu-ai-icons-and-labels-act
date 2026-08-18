@@ -112,6 +112,13 @@ search.
 
 **One plan: $6.99/mo per store, unlimited products and images, 7-day trial.**
 
+The trial is a no-card trial: seven days of the full app from install, with no
+subscription to approve. That was chosen over Shopify's own `trialDays` — which
+requires approving a charge up front — to keep install friction as low as
+possible while merchants are still discovering the obligation exists. The cost
+is that the App Store listing shows no "free trial" badge, since Shopify does
+not know about a trial it is not managing.
+
 This undercuts the whole observed field ($9.99–15) rather than competing inside
 it. The reasoning it rests on:
 

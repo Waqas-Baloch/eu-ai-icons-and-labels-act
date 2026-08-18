@@ -9,9 +9,11 @@ import { appendAudit } from "~/lib/audit.server";
 import { ensureMetafieldDefinitions } from "~/lib/metafields.server";
 import { TERMS_VERSION } from "~/lib/terms";
 import { redirectEmbedded } from "~/lib/embedded-redirect.server";
+import { isAlwaysAllowed, trialEndFrom } from "~/lib/entitlement";
+import { resolveEntitlement } from "~/lib/entitlement.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session, admin } = await authenticate.admin(request);
+  const { session, admin, billing } = await authenticate.admin(request);
   const shopDomain = session.shop;
 
   const existing = await prisma.shop.findUnique({
@@ -23,8 +25,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // First load after install: create the shop, its default settings and the
     // metafield definitions the theme extension reads. The guided setup then
     // takes over from the dashboard.
+    // The free week starts now. Stored rather than derived from installedAt
+    // so that changing TRIAL_DAYS later cannot retroactively lengthen or cut
+    // short a trial already under way, and so support can extend one shop.
     await prisma.shop.create({
-      data: { domain: shopDomain, settings: { create: {} } },
+      data: {
+        domain: shopDomain,
+        trialEndsAt: trialEndFrom(new Date()),
+        settings: { create: {} },
+      },
     });
     await appendAudit(shopDomain, {
       action: "app.installed",
@@ -63,6 +72,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw redirectEmbedded(request, "/app/terms");
   }
 
+  const { access, trialDaysLeft } = await resolveEntitlement(
+    shopDomain,
+    billing,
+  );
+
+  // Second gate, after terms. Locked shops keep their audit trail and its
+  // export — see isAlwaysAllowed() — and every label already published stays
+  // on the storefront, because the theme extension reads product metafields
+  // and never asks about billing.
+  if (access === "locked" && !isAlwaysAllowed(url.pathname)) {
+    throw redirectEmbedded(request, "/app/billing");
+  }
+
   const pendingReview = await prisma.imageAssessment.count({
     where: { shopDomain, disclosureState: "unknown" },
   });
@@ -73,11 +95,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     pendingReview,
     onboardingComplete: Boolean(shop?.onboardingCompletedAt),
     termsAccepted: shop?.termsVersion === TERMS_VERSION,
+    access,
+    trialDaysLeft,
   };
 };
 
 export default function AppLayout() {
-  const { pendingReview, onboardingComplete } = useLoaderData<typeof loader>();
+  const { pendingReview, onboardingComplete, access, trialDaysLeft } =
+    useLoaderData<typeof loader>();
+
+  // A locked shop is redirected away from the working pages, so listing them
+  // would only offer links that bounce straight back to the plan page. What
+  // stays is what still works: their record, the terms, and how to subscribe.
+  const locked = access === "locked";
 
   return (
     <>
@@ -88,18 +118,32 @@ export default function AppLayout() {
         its images.
       */}
       <NavMenu>
-        <Link to="/app" rel="home">
-          Products
+        {/*
+          rel="home" must stay on the first link whatever the state — App Bridge
+          uses it to resolve the app's root, not merely to style the item.
+        */}
+        <Link to={locked ? "/app/billing" : "/app"} rel="home">
+          {locked ? "Plan" : "Products"}
         </Link>
-        {/* Setup stays in the nav until finished, then disappears rather than
-            lingering as a permanently ticked-off item. */}
-        {!onboardingComplete && <Link to="/app/setup">Setup</Link>}
-        {pendingReview > 0 && (
-          <Link to="/app?filter=review">Needs review ({pendingReview})</Link>
+        {!locked && (
+          <>
+            {/* Setup stays in the nav until finished, then disappears rather
+                than lingering as a permanently ticked-off item. */}
+            {!onboardingComplete && <Link to="/app/setup">Setup</Link>}
+            {pendingReview > 0 && (
+              <Link to="/app?filter=review">Needs review ({pendingReview})</Link>
+            )}
+          </>
         )}
         <Link to="/app/audit">Audit trail</Link>
-        <Link to="/app/settings">Settings</Link>
-        <Link to="/app/billing">Plan</Link>
+        {!locked && <Link to="/app/settings">Settings</Link>}
+        {!locked && (
+          <Link to="/app/billing">
+            {access === "trial"
+              ? `Plan (${trialDaysLeft} ${trialDaysLeft === 1 ? "day" : "days"} left)`
+              : "Plan"}
+          </Link>
+        )}
         <Link to="/app/terms">Terms</Link>
       </NavMenu>
       <Outlet />

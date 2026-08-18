@@ -149,3 +149,33 @@ Submission happens in the **Partner Dashboard**, not the CLI. You need:
 - **Pricing is a single $6.99/mo plan** with a 7-day trial, deliberately below
   the $9.99–15 field. It only works if the app stays self-service — see the
   pricing decision in `docs/MARKET.md` for what that trades away.
+- **`SHOPIFY_BILLING_TEST` must be `0` in production.** Anything else keeps
+  Shopify billing in test mode, where merchants approve a subscription that is
+  never actually charged. The app will look like it is working and earn nothing.
+
+## How billing is enforced
+
+The free week is ours, not Shopify's: `trialEndsAt` is stamped at install and no
+card is asked for. `trialDays` in the billing config is therefore `0`, and
+`app/routes/app.billing.tsx` passes whatever is left of the week to
+`billing.request()` per merchant — so subscribing early does not shorten the
+trial, and the two trials cannot stack into fourteen days.
+
+Access has three states (`app/lib/entitlement.ts`): `trial`, `subscribed`,
+`locked`. A locked shop keeps three things:
+
+- every label already on its storefront, because the theme extension reads
+  product metafields and never asks about billing;
+- the audit trail and its CSV export, which are the merchant's own evidence;
+- the terms and plan pages, so they can subscribe.
+
+Two gates, because one is not enough: the layout loader in `app/routes/app.tsx`
+covers pages, and each write action calls `requireUnlocked()` separately —
+Remix does not run a parent loader before a child action, so a POST straight to
+a save endpoint would otherwise bypass the page gate entirely. A test in
+`test/entitlement.test.ts` enumerates every route with an action and fails if
+one neither calls the guard nor is on the exempt list.
+
+The billing check **fails open**: if Shopify cannot be reached, access is
+granted and the failure logged. Locking out a paying merchant during an API blip
+is worse than a lapsed one keeping access until the next page load.

@@ -18,6 +18,8 @@
  * merchant who hits a ceiling mid-catalog and is left partly labelled.
  */
 
+import { TRIAL_DAYS } from "./entitlement";
+
 export const PLANS = {
   UNLIMITED: "Unlimited",
 } as const;
@@ -27,8 +29,14 @@ export type PlanName = (typeof PLANS)[keyof typeof PLANS];
 /** USD per 30 days. Mirrored in the billing config in shopify.server.ts. */
 export const PLAN_PRICE_USD = 6.99;
 
-/** Days of full access before the first charge. */
-export const PLAN_TRIAL_DAYS = 7;
+/**
+ * Days of full access before the first charge.
+ *
+ * Aliased from lib/entitlement.ts, which owns the trial: it is granted at
+ * install with no card, not by Shopify, so the rules that read it live with the
+ * access checks rather than with the price.
+ */
+export const PLAN_TRIAL_DAYS = TRIAL_DAYS;
 
 export interface PlanDetail {
   name: PlanName;

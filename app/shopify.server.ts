@@ -8,7 +8,7 @@ import {
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 
 import prisma from "./db.server";
-import { PLANS, PLAN_PRICE_USD, PLAN_TRIAL_DAYS } from "./lib/plans";
+import { PLANS, PLAN_PRICE_USD } from "./lib/plans";
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
@@ -19,8 +19,13 @@ const shopify = shopifyApp({
   authPathPrefix: "/auth",
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
-  // Amount and trial length come from lib/plans.ts so the price the merchant
-  // is shown and the price they are charged cannot drift apart.
+  // Amount comes from lib/plans.ts so the price the merchant is shown and the
+  // price they are charged cannot drift apart.
+  //
+  // trialDays is 0 on purpose. The free week is ours — granted at install, with
+  // no card and no subscription (see lib/entitlement.ts) — and the billing
+  // route passes whatever is left of it to billing.request() per merchant. A
+  // standing trial here would stack on top of that and give away fourteen days.
   billing: {
     [PLANS.UNLIMITED]: {
       lineItems: [
@@ -30,7 +35,7 @@ const shopify = shopifyApp({
           interval: BillingInterval.Every30Days,
         },
       ],
-      trialDays: PLAN_TRIAL_DAYS,
+      trialDays: 0,
     },
   },
   future: {

@@ -30,12 +30,23 @@ describe("plans", () => {
   // shopify.server.ts ever goes back to a literal, the merchant can be shown
   // one number and billed another — which is the one billing bug that is not
   // recoverable by apologising.
-  it("bills from the same constants it displays", () => {
+  it("bills the price it displays", () => {
     const server = readFileSync("app/shopify.server.ts", "utf8");
 
     expect(server).toContain("amount: PLAN_PRICE_USD");
-    expect(server).toContain("trialDays: PLAN_TRIAL_DAYS");
     expect(server).toContain("[PLANS.UNLIMITED]");
+  });
+
+  // The free week is granted at install with no card, and app.billing.tsx
+  // passes whatever is left of it to billing.request() per merchant. A standing
+  // trial in the config would stack on top and give away fourteen days.
+  it("declares no standing Shopify trial, so the two cannot stack", () => {
+    const server = readFileSync("app/shopify.server.ts", "utf8");
+    expect(server).toContain("trialDays: 0");
+
+    const billing = readFileSync("app/routes/app.billing.tsx", "utf8");
+    expect(billing).toContain("trialDays,");
+    expect(billing).toContain("shopifyTrialDaysFor");
   });
 
   describe("isPlanName", () => {

@@ -9,6 +9,7 @@ import { scanCatalog } from "~/lib/scan.server";
 import { boolAttr, collectFields } from "~/lib/polaris-form";
 import { useFieldValues } from "~/hooks/useFieldValues";
 import { redirectEmbedded } from "~/lib/embedded-redirect.server";
+import { requireUnlocked } from "~/lib/entitlement.server";
 
 /**
  * Guided setup.
@@ -59,7 +60,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session, admin } = await authenticate.admin(request);
+  const { session, admin, billing } = await authenticate.admin(request);
+
+  // Remix does not run the parent layout loader before a child action, so
+  // the page gate in routes/app.tsx does not cover this. Without it a POST
+  // straight to this endpoint would still write for a shop that stopped
+  // paying.
+  await requireUnlocked(session.shop, billing);
   const shopDomain = session.shop;
   const form = await request.formData();
   const intent = String(form.get("intent") ?? "");

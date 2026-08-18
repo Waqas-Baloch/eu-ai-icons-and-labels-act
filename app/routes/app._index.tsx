@@ -9,6 +9,7 @@ import { scanCatalog } from "~/lib/scan.server";
 import { describeState } from "~/lib/display";
 import { EmptyState } from "~/components/EmptyState";
 import { boolAttr } from "~/lib/polaris-form";
+import { requireUnlocked } from "~/lib/entitlement.server";
 
 const PAGE_SIZE = 25;
 
@@ -122,7 +123,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session, admin } = await authenticate.admin(request);
+  const { session, admin, billing } = await authenticate.admin(request);
+
+  // Remix does not run the parent layout loader before a child action, so the
+  // page gate in routes/app.tsx does not cover this. A scan writes assessment
+  // rows and spends Shopify API calls, so it is a write like any other.
+  await requireUnlocked(session.shop, billing);
+
   try {
     const result = await scanCatalog(admin, session.shop, "manual");
     return { ok: true, result };

@@ -9,6 +9,7 @@ import { clampPlacement } from "~/lib/badge-layout";
 import { describeState, formatDateTime } from "~/lib/display";
 import { ProductEditor } from "~/components/ProductEditor";
 import editorStyles from "~/styles/editor.css?url";
+import { requireUnlocked } from "~/lib/entitlement.server";
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: editorStyles },
@@ -70,7 +71,13 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session, admin } = await authenticate.admin(request);
+  const { session, admin, billing } = await authenticate.admin(request);
+
+  // Remix does not run the parent layout loader before a child action, so
+  // the page gate in routes/app.tsx does not cover this. Without it a POST
+  // straight to this endpoint would still write for a shop that stopped
+  // paying.
+  await requireUnlocked(session.shop, billing);
   const shopDomain = session.shop;
   const form = await request.formData();
 
