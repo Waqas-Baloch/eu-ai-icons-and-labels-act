@@ -112,6 +112,28 @@ export async function fetchImageHead(
 }
 
 /**
+ * Runs `worker` over `items` with at most `limit` in flight.
+ *
+ * The scan's cost is almost entirely waiting on image downloads, and doing them
+ * one at a time is what made a large catalog impossible to finish inside a
+ * request. Six is chosen to be brisk without hammering the CDN.
+ */
+async function mapWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      await worker(items[index]);
+    }
+  });
+  await Promise.all(runners);
+}
+
+/**
  * Hash of the downloaded prefix, used to recognise the same asset reused
  * across products so the merchant declares it once. Not a hash of the whole
  * file — two distinct images sharing a 256KB prefix is not a realistic case.
@@ -155,7 +177,26 @@ export interface ScanResult {
   productsSeen: number;
   imagesSeen: number;
   imagesFlagged: number;
+  /**
+   * True when the time budget ran out before the catalog was finished.
+   *
+   * Running the scan again continues from where it effectively stopped: an
+   * image already assessed is not downloaded a second time, so each run reaches
+   * further than the last until the catalog is covered. That is why this needs
+   * no stored cursor — re-walking the product pages is cheap next to the
+   * downloads, which are what the budget is actually protecting.
+   */
+  partial: boolean;
 }
+
+/**
+ * How long a single scan may spend before stopping and reporting partial.
+ *
+ * A scan runs inside an HTTP request. Without a bound, a catalog of any size
+ * simply hangs until something upstream gives up, and the merchant is left with
+ * no result and no explanation.
+ */
+export const SCAN_TIME_BUDGET_MS = 20_000;
 
 /**
  * Scans an entire catalog.
@@ -180,13 +221,27 @@ export async function scanCatalog(
   });
 
   const policy = await loadPolicy(shopDomain);
-  const totals: ScanResult = { productsSeen: 0, imagesSeen: 0, imagesFlagged: 0 };
+  const totals: ScanResult = {
+    productsSeen: 0,
+    imagesSeen: 0,
+    imagesFlagged: 0,
+    partial: false,
+  };
+
+  const deadline = Date.now() + SCAN_TIME_BUDGET_MS;
 
   try {
     let cursor: string | null = null;
     let hasNextPage = true;
 
     while (hasNextPage) {
+      // Checked per page rather than per product: a page is the unit that can
+      // be abandoned without leaving a product half-written.
+      if (Date.now() > deadline) {
+        totals.partial = true;
+        break;
+      }
+
       const response = await admin.graphql(PRODUCTS_QUERY, {
         variables: { cursor },
       });
@@ -216,7 +271,7 @@ export async function scanCatalog(
     await prisma.scanRun.update({
       where: { id: scanRun.id },
       data: {
-        status: "completed",
+        status: totals.partial ? "partial" : "completed",
         finishedAt: new Date(),
         productsSeen: totals.productsSeen,
         imagesSeen: totals.imagesSeen,
@@ -225,7 +280,7 @@ export async function scanCatalog(
     });
 
     await appendAudit(shopDomain, {
-      action: "scan.completed",
+      action: totals.partial ? "scan.partial" : "scan.completed",
       actor: "system",
       payload: { scanRunId: scanRun.id, ...totals },
     });
@@ -278,15 +333,31 @@ export async function assessProduct(
 
   const featuredId = product.featuredMedia?.id ?? null;
 
+  // One query for the whole product instead of one per image.
+  const existingRows = await prisma.imageAssessment.findMany({
+    where: { shopDomain, imageId: { in: mediaImages.map((m) => m.id) } },
+  });
+  const existingById = new Map(existingRows.map((row) => [row.imageId, row]));
+
+  // Download the heads we actually need up front and in parallel. Sequentially
+  // this was the whole cost of a scan: one 256KB round trip per image, and a
+  // product with a dozen photos spent a dozen round trips waiting.
+  const needsDownload = mediaImages.filter((media) => {
+    const row = existingById.get(media.id);
+    return !(row && row.provenanceSource !== "none" && row.contentHash);
+  });
+  const heads = new Map<string, Uint8Array | null>();
+  await mapWithConcurrency(needsDownload, 6, async (media) => {
+    heads.set(media.id, await fetchImageHead(media.image.url));
+  });
+
   for (const [position, media] of mediaImages.entries()) {
     const isFeatured = featuredId
       ? media.id === featuredId
       : // No featuredMedia reported: the first media is what Shopify shows.
         position === 0;
 
-    const existing = await prisma.imageAssessment.findUnique({
-      where: { shopDomain_imageId: { shopDomain, imageId: media.id } },
-    });
+    const existing = existingById.get(media.id) ?? null;
 
     // Re-download only when we have not seen this image before. Product
     // metadata changes far more often than the image bytes do.
@@ -302,7 +373,7 @@ export async function assessProduct(
         raw: existing.provenanceRaw ? JSON.parse(existing.provenanceRaw) : undefined,
       };
     } else {
-      const bytes = await fetchImageHead(media.image.url);
+      const bytes = heads.get(media.id) ?? null;
       if (bytes) {
         detected = parseProvenance(bytes);
         contentHash = hashHead(bytes);

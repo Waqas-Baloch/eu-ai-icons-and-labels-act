@@ -175,3 +175,65 @@ describe("write actions are gated", () => {
     ).toBe(true);
   });
 });
+
+/**
+ * The scan runs inside an HTTP request and must be bounded, or a catalog of any
+ * real size hangs until something upstream gives up and the merchant is left
+ * with no result and no explanation. These assert the shape of that bound
+ * rather than running a scan, which would need a live Shopify admin.
+ */
+describe("scan is bounded", () => {
+  // Read from source rather than imported: scan.server.ts pulls in Prisma and
+  // the Shopify admin client, which this suite has no business booting.
+  it("declares a time budget well inside a request", () => {
+    const source = readFileSync("app/lib/scan.server.ts", "utf8");
+    const match = source.match(/SCAN_TIME_BUDGET_MS = ([\d_]+)/);
+    expect(match, "SCAN_TIME_BUDGET_MS not found").not.toBeNull();
+
+    const budget = Number(match![1].replace(/_/g, ""));
+    expect(budget).toBeGreaterThan(5_000);
+    expect(budget).toBeLessThanOrEqual(30_000);
+  });
+
+  it("checks the budget inside the pagination loop, not only before it", () => {
+    const source = readFileSync("app/lib/scan.server.ts", "utf8");
+    const loop = source.slice(source.indexOf("while (hasNextPage)"));
+    expect(loop).toContain("Date.now() > deadline");
+    expect(loop.indexOf("partial = true")).toBeGreaterThan(-1);
+  });
+
+  // Sequential downloads were the entire cost of a scan: one 256KB round trip
+  // per image, awaited one at a time.
+  it("downloads image heads in parallel and batches the row lookup", () => {
+    const source = readFileSync("app/lib/scan.server.ts", "utf8");
+    expect(source).toContain("mapWithConcurrency");
+    // One query per product, not one per image.
+    expect(source).toContain("imageAssessment.findMany");
+    expect(source).not.toContain("imageAssessment.findUnique");
+
+    // The only fetch must sit inside the concurrency helper, and the per-image
+    // loop must read from the prefetched map rather than awaiting its own.
+    const fetches = source.match(/fetchImageHead\(media\.image\.url\)/g) ?? [];
+    expect(fetches).toHaveLength(1);
+
+    const parallelBlock = source.slice(
+      source.indexOf("await mapWithConcurrency"),
+      source.indexOf("for (const [position, media] of mediaImages.entries())"),
+    );
+    expect(parallelBlock).toContain("fetchImageHead(media.image.url)");
+
+    const perImageLoop = source.slice(
+      source.indexOf("for (const [position, media] of mediaImages.entries())"),
+    );
+    expect(perImageLoop).not.toContain("fetchImageHead(");
+    expect(perImageLoop).toContain("heads.get(media.id)");
+  });
+
+  // A partial scan must never be recorded as a completed one.
+  it("records a partial run distinctly in the audit trail", () => {
+    const source = readFileSync("app/lib/scan.server.ts", "utf8");
+    expect(source).toContain('"scan.partial"');
+    const audit = readFileSync("app/lib/compliance/audit.ts", "utf8");
+    expect(audit).toContain('"scan.partial"');
+  });
+});

@@ -351,6 +351,26 @@ export default function Products() {
           <s-paragraph>{fetcher.data.error}</s-paragraph>
         </s-banner>
       )}
+
+      {/*
+        A scan stops on a time budget rather than running until something
+        upstream times out. Saying so plainly matters here: silence would let a
+        merchant believe a large catalog had been fully assessed when it had
+        not, which is precisely the false assurance this app must not give.
+      */}
+      {fetcher.data?.ok === true &&
+        "result" in fetcher.data &&
+        fetcher.data.result.partial && (
+          <s-banner tone="warning" heading="Catalog not fully scanned yet">
+            <s-paragraph>
+              {fetcher.data.result.productsSeen} product
+              {fetcher.data.result.productsSeen === 1 ? "" : "s"} assessed so
+              far. Run the scan again to continue — it picks up where it left
+              off, and each run gets further because images already assessed are
+              not re-checked.
+            </s-paragraph>
+          </s-banner>
+        )}
     </s-page>
   );
 }

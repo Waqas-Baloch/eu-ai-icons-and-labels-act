@@ -28,6 +28,9 @@ export type AuditAction =
   | "disclaimer.accepted"
   | "scan.started"
   | "scan.completed"
+  // Stopped on its time budget with the catalog unfinished. Recorded distinctly
+  // from completed so the trail cannot imply the whole catalog was assessed.
+  | "scan.partial"
   | "scan.failed"
   | "image.assessed"
   | "image.declared"

@@ -100,4 +100,54 @@ describe("storefront/server key parity", () => {
       list.map((r) => r.replace(/\s+/g, "")).sort();
     expect(normalise(clientRegexes)).toEqual(normalise(serverRegexes));
   });
+
+  /**
+   * Stronger than comparing the regexes: run the storefront's own fileKey()
+   * against imageFileKey() on the same URLs. Matching source text would still
+   * miss a change to the query-string split or the lowercasing, and either
+   * would break matching just as silently.
+   */
+  it("produces identical keys when actually run, not just identical regexes", () => {
+    const clientSource = readFileSync(
+      join(
+        process.cwd(),
+        "extensions/ai-disclosure/assets/eu-ai-disclosure.js",
+      ),
+      "utf8",
+    );
+
+    const start = clientSource.indexOf("function fileKey(url)");
+    const end = clientSource.indexOf("function decisionFor");
+    expect(start, "fileKey() not found in the overlay script").toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const fileKey = new Function(
+      `${clientSource.slice(start, end)}; return fileKey;`,
+    )() as (url: string) => string;
+
+    const CDN = "https://cdn.shopify.com/s/files/1/0001/0001/files";
+    const urls = [
+      `${CDN}/carrots.jpg`,
+      `${CDN}/carrots.jpg?v=1712345678`,
+      `${CDN}/carrots_800x.jpg?v=1`,
+      `${CDN}/carrots_x800.jpg`,
+      `${CDN}/carrots_1024x1024.jpg?v=9`,
+      `${CDN}/CARROTS_grande.PNG`,
+      `${CDN}/photo_master.webp`,
+      `${CDN}/my_small_thing_small.jpg`,
+      `${CDN}/box_relax.jpg`,
+      `${CDN}/a_b_c.jpg`,
+      `${CDN}/pack-of-carrots_2048x2048.jpg?v=1700000000`,
+      `${CDN}/with%20space_medium.jpg`,
+    ];
+
+    for (const url of urls) {
+      expect(fileKey(url), `diverged on ${url}`).toBe(imageFileKey(url));
+    }
+
+    // And a sanity check that the corpus is not all trivially equal, which
+    // would make the comparison meaningless.
+    expect(fileKey(`${CDN}/carrots_800x.jpg?v=1`)).toBe("carrots.jpg");
+  });
 });

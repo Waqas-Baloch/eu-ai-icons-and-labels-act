@@ -242,7 +242,9 @@ model ScanRun {
   shopDomain String
   shop       Shop   @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
 
-  status      String   @default("running") // running | completed | failed
+  // "partial" means the run stopped on its time budget with the catalog
+  // unfinished — never conflate it with "completed".
+  status      String   @default("running") // running | completed | partial | failed
   trigger     String   @default("manual")  // manual | install | webhook
   productsSeen Int     @default(0)
   imagesSeen   Int     @default(0)

@@ -67,11 +67,19 @@ export async function resolveEntitlement(
     }
   }
 
-  return {
-    access: accessState({ trialEndsAt, hasActivePayment, now }),
-    trialEndsAt,
-    trialDaysLeft,
-  };
+  const access = accessState({ trialEndsAt, hasActivePayment, now });
+
+  // Keep Shop.plan truthful. Nothing reads it for entitlement — billing.check
+  // is the source of truth — but it was previously never written at all, so the
+  // column said "none" for paying shops and would mislead anyone reading the
+  // table. Written only when it actually changes, so this stays a no-op on the
+  // overwhelming majority of loads.
+  const plan = access === "subscribed" ? PLANS.UNLIMITED : "none";
+  if (shop && shop.plan !== plan) {
+    await prisma.shop.update({ where: { domain: shopDomain }, data: { plan } });
+  }
+
+  return { access, trialEndsAt, trialDaysLeft };
 }
 
 /**

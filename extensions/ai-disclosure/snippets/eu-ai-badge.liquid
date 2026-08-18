@@ -3,7 +3,9 @@
 
   Parameters:
     variant   - ai_generated | ai_modified | ai | none
-    style     - black | white | black_solid | white_solid
+    style     - black | white | black_transparent | white_transparent
+                (black/white are the opaque artwork; the _transparent pair is
+                 the 50%-alpha artwork, which is why they are not the default)
     size      - small | medium | large
     placement - overlay position class suffix, or blank for inline
     notice    - optional text shown next to the badge
