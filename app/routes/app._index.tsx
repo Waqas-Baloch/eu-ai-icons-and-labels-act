@@ -202,7 +202,7 @@ export default function Products() {
           {data.needsReviewCount > 0 ? (
             <s-badge tone="critical">
               {data.needsReviewCount} product
-              {data.needsReviewCount === 1 ? "" : "s"} need review
+              {data.needsReviewCount === 1 ? " needs" : "s need"} review
             </s-badge>
           ) : (
             <s-badge tone="success" icon="check-circle">
