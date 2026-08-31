@@ -77,6 +77,37 @@ export function ErrorBoundary() {
   const error = useRouteError();
 
   const status = isRouteErrorResponse(error) ? error.status : null;
+
+  /*
+   * 401 and 410 are Shopify's auth handshake, not failures.
+   *
+   * The library throws a bare 401 carrying
+   * X-Shopify-API-Request-Failure-Reauthorize-Url to tell App Bridge to move
+   * the top frame, and a 410 to tell it to retry with a fresh session token.
+   * Both are protocol, and both arrive here as thrown responses.
+   *
+   * Rendering them as errors is worse than useless: it replaces a redirect the
+   * merchant should never notice with a page reading "401 — Unauthorized". That
+   * is exactly what happened on the Plan page, and what an App Store reviewer
+   * reported. Show a quiet waiting state instead and let App Bridge finish.
+   */
+  if (status === 401 || status === 410) {
+    return (
+      <Document apiKey="">
+        <p
+          style={{
+            font: "15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            color: "#616161",
+            margin: "3rem auto",
+            maxWidth: "42rem",
+            padding: "0 1.5rem",
+          }}
+        >
+          Reconnecting to Shopify…
+        </p>
+      </Document>
+    );
+  }
   const detail = isRouteErrorResponse(error)
     ? error.data || error.statusText
     : error instanceof Error

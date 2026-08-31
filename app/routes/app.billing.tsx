@@ -1,12 +1,10 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { useFetcher, useLoaderData } from "@remix-run/react";
+import type { LoaderFunctionArgs } from "@remix-run/node";
+import { useLoaderData } from "@remix-run/react";
 
 import prisma from "~/db.server";
 import { authenticate } from "~/shopify.server";
-import { appendAudit } from "~/lib/audit.server";
 import { PLAN_DETAILS, pricingPlansUrl } from "~/lib/plans";
 import { accessState, trialDaysRemaining } from "~/lib/entitlement";
-import { boolAttr } from "~/lib/polaris-form";
 import { formatDateTime } from "~/lib/display";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -27,6 +25,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const trialDaysLeft = trialDaysRemaining(shop?.trialEndsAt, now);
 
   return {
+    planUrl: pricingPlansUrl(session.shop),
     hasActivePayment: check.hasActivePayment,
     activePlans: check.appSubscriptions.map((subscription) => subscription.name),
     productCount,
@@ -40,42 +39,24 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session, redirect } = await authenticate.admin(request);
-
-  const actor =
-    (session.onlineAccessInfo?.associated_user?.email as string | undefined) ??
-    session.shop;
-
-  await appendAudit(session.shop, {
-    action: "plan.changed",
-    actor,
-    payload: { action: "opened Shopify plan selection" },
-  });
-
-  // Send the merchant to Shopify's own plan page rather than creating the
-  // subscription here.
-  //
-  // This app is on Shopify App Pricing: the plan is defined in the Partner
-  // Dashboard and Shopify runs the checkout. An app with App Pricing enabled is
-  // forbidden from calling appSubscriptionCreate — Shopify rejects it with
-  // "Managed Pricing Apps cannot use the Billing API", which an App Store
-  // reviewer saw as a 401 when trying to subscribe. billing.request() is
-  // exactly that call, so it cannot be used here.
-  //
-  // target "_top" because the plan page lives in the Shopify admin, outside
-  // this app's iframe, and will not render inside it.
-  throw redirect(pricingPlansUrl(session.shop), { target: "_top" });
-};
-
+/*
+ * There is deliberately no action here.
+ *
+ * The obvious implementation — POST, then redirect(planUrl, {target: "_top"})
+ * — does not work from a fetcher. For a data request that helper throws a 401
+ * carrying X-Shopify-API-Request-Failure-Reauthorize-Url, which is a signal for
+ * App Bridge rather than a failure. Anything that renders thrown responses,
+ * including this app's own root ErrorBoundary, turns that signal into an error
+ * page reading "401 — Unauthorized".
+ *
+ * A plain link avoids the whole exchange: the merchant clicks, the browser
+ * navigates the top frame, and no request reaches this app at all.
+ */
 // The only plan. Named here so the component reads as "the plan", not "a plan".
 const PLAN = PLAN_DETAILS[0];
 
 export default function Billing() {
   const data = useLoaderData<typeof loader>();
-  const fetcher = useFetcher<typeof action>();
-  const busy = fetcher.state !== "idle";
-
   // hasActivePayment covers the trial too: Shopify reports a subscription in
   // its trial period as active, which is what we want — the merchant has
   // subscribed and should not be asked to again.
@@ -156,12 +137,11 @@ export default function Billing() {
           {isSubscribed ? (
             <s-badge tone="success">Subscribed</s-badge>
           ) : (
-            <s-button
-              variant="primary"
-              disabled={boolAttr(busy)}
-              onClick={() => fetcher.submit({}, { method: "post" })}
-            >
-              {busy ? "Opening Shopify…" : "Choose a plan"}
+            // target="_top" because the plan page lives in the Shopify admin,
+            // outside this app's iframe and will not render inside it. A
+            // user-initiated click may navigate the top frame.
+            <s-button variant="primary" href={data.planUrl} target="_top">
+              Choose a plan
             </s-button>
           )}
         </s-stack>

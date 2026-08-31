@@ -45,8 +45,15 @@ describe("plans", () => {
 
     expect(billing).not.toContain("billing.request(");
     expect(server).not.toContain("billing: {");
+
+    // The merchant is sent to Shopify's own plan page, as a plain link.
     expect(billing).toContain("pricingPlansUrl(session.shop)");
-    expect(billing).toContain('target: "_top"');
+    expect(billing).toContain('target="_top"');
+
+    // And not via an action. A fetcher POST + redirect(_top) throws a 401
+    // carrying a reauthorize header — App Bridge protocol that any error
+    // boundary will render as "401 — Unauthorized" instead of redirecting.
+    expect(billing).not.toContain("export const action");
   });
 
   // A wrong handle sends merchants to a 404 at the moment they try to pay.
