@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -98,5 +99,36 @@ describe("redirectEmbedded", () => {
       embeddedPath(ADMIN_LOAD, "/app/terms"),
     );
     expect(response.headers.get("Location")).toContain(`shop=${SHOP}`);
+  });
+});
+
+/**
+ * The login route is the one page that can strand a merchant inside the admin.
+ *
+ * login() redirects into OAuth the moment a request carries a shop, and OAuth
+ * cannot render in the app frame — accounts.shopify.com sets
+ * X-Frame-Options: DENY, which the merchant sees as "refused to connect". A
+ * plain GET must therefore never reach login(), and an embedded request must
+ * never reach this route at all.
+ */
+describe("auth.login cannot strand an embedded merchant", () => {
+  const source = readFileSync("app/routes/auth.login.tsx", "utf8");
+
+  it("does not call login() from the loader", () => {
+    const loader = source.slice(
+      source.indexOf("export const loader"),
+      source.indexOf("export const action"),
+    );
+    expect(loader).not.toContain("login(request)");
+  });
+
+  it("still calls login() from the action, so logging in works", () => {
+    const action = source.slice(source.indexOf("export const action"));
+    expect(action).toContain("login(request)");
+  });
+
+  it("sends an embedded request back into the app", () => {
+    expect(source).toContain("isEmbedded(url)");
+    expect(source).toContain('redirect(`/app?${url.searchParams.toString()}`)');
   });
 });
