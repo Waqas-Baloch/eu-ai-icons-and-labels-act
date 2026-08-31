@@ -1,30 +1,44 @@
-Thank you for the detailed report and the screencast — the 401 was real and
-we have fixed it. There were three separate causes.
+Subject: 1.2.2 — 401 on subscribe, fixed and verified
 
-1. The app was calling the Billing API to create the subscription
-   (appSubscriptionCreate, via billing.request). Because we have a public plan
-   defined, the app is on Shopify App Pricing, which forbids that call. The app
-   now sends the merchant to the plan selection page at
-   /charges/<app-handle>/pricing_plans with target="_top", as documented, and
-   no longer creates charges itself. The billing configuration has been removed.
+Thank you for the report and the screencast. Both failures were ours and both
+are fixed. Here is what was wrong and what we changed.
 
-2. Our entitlement check filtered active subscriptions by plan name. Under
-   Shopify App Pricing the subscription is named by Shopify, so that filter
-   could report a paying merchant as unsubscribed. It now accepts any active
-   subscription.
+THE 401 ON SUBSCRIBE
 
-3. Our /auth/login route started OAuth on a GET whenever the request carried a
-   shop parameter. Inside the admin frame that rendered as
-   "accounts.shopify.com refused to connect", which is the second failure
-   visible in your screencast. OAuth now starts only from an explicit POST, and
-   an embedded request is sent back into the app so token exchange handles the
-   session.
+The subscription itself was never rejected by Shopify. Our app called
+billing.request(), which throws a redirect to the charge approval screen. For a
+fetcher submission that redirect is returned as a 401 carrying
+X-Shopify-API-Request-Failure-Reauthorize-Url — an App Bridge instruction
+rather than a failure. We had recently added a global error boundary that
+rendered any thrown response as an error page, so it turned that instruction
+into a page reading "401 — Unauthorized" and the redirect never happened.
 
-All three are deployed and verified against production.
+Fixed in two parts:
 
-One thing we could not resolve from our side. On our development store the plan
-selection page itself returns 404, with the app handle correct, the plan
-configured ($6.99/month, handle "unlimited"), and the store and listing both
-set to English. This matches the documented behaviour for a draft app whose
-listing is still in review. If you can see a cause on your side we would be
-grateful to know, and we will fix it immediately.
+- The subscription is now created explicitly with appSubscriptionCreate, and
+  the confirmation URL is returned to the page as data. The page moves the top
+  frame to it and also renders it as a visible link, so the merchant reaches
+  the approval screen whether or not the automatic navigation is permitted.
+  Nothing depends on a status code being interpreted correctly.
+
+- The error boundary no longer renders 401 or 410 as errors. Both are App
+  Bridge protocol: 401 asks it to move the top frame, 410 to retry with a fresh
+  session token.
+
+THE SECOND FAILURE IN YOUR SCREENCAST
+
+The recording also shows "accounts.shopify.com refused to connect". Our
+/auth/login route called shopify.login() from its loader, which starts OAuth as
+soon as a request carries a shop parameter. Inside the admin frame that is
+unreachable, since the OAuth page cannot be framed. OAuth now starts only from
+an explicit POST, and an embedded request is sent back into the app so token
+exchange establishes the session.
+
+VERIFIED
+
+We have re-tested on our development store. Pressing Subscribe now reaches the
+Shopify approval screen showing "Plan: Unlimited, $6.99 USD every 30 days" with
+the remaining free-trial days applied, so a merchant who subscribes early is
+not charged before their trial would have ended.
+
+Both fixes are deployed. We are ready for re-review.
