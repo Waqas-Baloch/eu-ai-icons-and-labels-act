@@ -21,30 +21,16 @@
 import { TRIAL_DAYS } from "./entitlement";
 
 /**
- * The app handle, as it appears in shopify.app.toml.
+ * The plan name sent to Shopify, and shown on the merchant's invoice.
  *
- * Needed to build the Shopify App Pricing plan page URL. A test asserts the two
- * stay in step, because a wrong handle here sends merchants to a 404 at exactly
- * the moment they are trying to pay.
+ * This app creates its own subscription through the Billing API. It is not on
+ * Shopify App Pricing: the "public plan" declared in the App Store listing is
+ * listing metadata describing the price, not a managed-pricing configuration.
+ * Verified directly — appSubscriptionCreate succeeds against the live shop and
+ * returns a confirmation URL, and the /charges/<handle>/pricing_plans page
+ * 404s precisely because no managed plan exists to render.
  */
-export const APP_HANDLE = "eu-ai-icons-and-labels-act";
-
-/**
- * Where a merchant chooses and approves a plan.
- *
- * Under Shopify App Pricing the plans live in the Partner Dashboard and Shopify
- * runs the checkout. The app does not — and may not — create the subscription
- * itself: once App Pricing is enabled, appSubscriptionCreate is rejected with
- * "Managed Pricing Apps cannot use the Billing API". That rejection is what an
- * App Store reviewer saw as a 401 when trying to subscribe.
- *
- * The page lives in the Shopify admin, outside this app's iframe, so it must be
- * opened with target "_top".
- */
-export function pricingPlansUrl(shopDomain: string): string {
-  const storeHandle = shopDomain.replace(/\.myshopify\.com$/, "");
-  return `https://admin.shopify.com/store/${storeHandle}/charges/${APP_HANDLE}/pricing_plans`;
-}
+export const PLAN_NAME = "Unlimited";
 
 /** USD per 30 days. Mirrored in the billing config in shopify.server.ts. */
 export const PLAN_PRICE_USD = 6.99;
@@ -68,7 +54,7 @@ export interface PlanDetail {
 
 export const PLAN_DETAILS: PlanDetail[] = [
   {
-    name: "Unlimited",
+    name: PLAN_NAME,
     price: `$${PLAN_PRICE_USD.toFixed(2)}`,
     trialDays: PLAN_TRIAL_DAYS,
     blurb: "Everything, for one price per store.",

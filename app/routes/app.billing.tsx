@@ -1,11 +1,18 @@
-import type { LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useEffect } from "react";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { useFetcher, useLoaderData } from "@remix-run/react";
 
 import prisma from "~/db.server";
 import { authenticate } from "~/shopify.server";
-import { PLAN_DETAILS, pricingPlansUrl } from "~/lib/plans";
-import { accessState, trialDaysRemaining } from "~/lib/entitlement";
+import { PLAN_DETAILS, PLAN_NAME, PLAN_PRICE_USD } from "~/lib/plans";
+import { appendAudit } from "~/lib/audit.server";
+import {
+  accessState,
+  shopifyTrialDaysFor,
+  trialDaysRemaining,
+} from "~/lib/entitlement";
 import { formatDateTime } from "~/lib/display";
+import { boolAttr } from "~/lib/polaris-form";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { billing, session } = await authenticate.admin(request);
@@ -25,7 +32,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const trialDaysLeft = trialDaysRemaining(shop?.trialEndsAt, now);
 
   return {
-    planUrl: pricingPlansUrl(session.shop),
     hasActivePayment: check.hasActivePayment,
     activePlans: check.appSubscriptions.map((subscription) => subscription.name),
     productCount,
@@ -39,24 +45,130 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
-/*
- * There is deliberately no action here.
+const SUBSCRIPTION_CREATE = `#graphql
+  mutation AppSubscriptionCreate(
+    $name: String!
+    $lineItems: [AppSubscriptionLineItemInput!]!
+    $returnUrl: URL!
+    $test: Boolean
+    $trialDays: Int
+  ) {
+    appSubscriptionCreate(
+      name: $name
+      lineItems: $lineItems
+      returnUrl: $returnUrl
+      test: $test
+      trialDays: $trialDays
+    ) {
+      confirmationUrl
+      userErrors { field message }
+    }
+  }
+`;
+
+/**
+ * Starts a subscription and hands the confirmation URL back to the browser.
  *
- * The obvious implementation — POST, then redirect(planUrl, {target: "_top"})
- * — does not work from a fetcher. For a data request that helper throws a 401
- * carrying X-Shopify-API-Request-Failure-Reauthorize-Url, which is a signal for
- * App Bridge rather than a failure. Anything that renders thrown responses,
- * including this app's own root ErrorBoundary, turns that signal into an error
- * page reading "401 — Unauthorized".
+ * Deliberately not billing.request(). That helper throws a redirect, and for a
+ * fetcher submission the redirect becomes a bare 401 carrying
+ * X-Shopify-API-Request-Failure-Reauthorize-Url — App Bridge protocol rather
+ * than a failure. Anything that renders thrown responses turns it into a page
+ * reading "401 — Unauthorized", which is exactly what an App Store reviewer
+ * reported and what this app's own error boundary was doing.
  *
- * A plain link avoids the whole exchange: the merchant clicks, the browser
- * navigates the top frame, and no request reaches this app at all.
+ * Returning the URL as data instead keeps the outcome visible: the page can
+ * navigate the top frame itself, and can show the merchant a link if that is
+ * blocked. Nothing depends on a status code being interpreted correctly.
  */
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { admin, session } = await authenticate.admin(request);
+
+  const shop = await prisma.shop.findUnique({ where: { domain: session.shop } });
+
+  // Hand Shopify whatever is left of our own free week, so subscribing early
+  // costs the merchant nothing: the first charge still falls at the end of the
+  // week they were promised. Zero once the trial has run out.
+  const trialDays = shopifyTrialDaysFor(shop?.trialEndsAt, new Date());
+
+  const response = await admin.graphql(SUBSCRIPTION_CREATE, {
+    variables: {
+      name: PLAN_NAME,
+      returnUrl: `${process.env.SHOPIFY_APP_URL}/app/billing`,
+      test: process.env.SHOPIFY_BILLING_TEST !== "0",
+      trialDays,
+      lineItems: [
+        {
+          plan: {
+            appRecurringPricingDetails: {
+              price: { amount: PLAN_PRICE_USD, currencyCode: "USD" },
+              interval: "EVERY_30_DAYS",
+            },
+          },
+        },
+      ],
+    },
+  });
+
+  const body = (await response.json()) as {
+    data?: {
+      appSubscriptionCreate?: {
+        confirmationUrl?: string | null;
+        userErrors?: { field?: string[]; message: string }[];
+      };
+    };
+  };
+
+  const result = body.data?.appSubscriptionCreate;
+  const userErrors = result?.userErrors ?? [];
+
+  if (userErrors.length || !result?.confirmationUrl) {
+    const message =
+      userErrors.map((error) => error.message).join(" ") ||
+      "Shopify did not return a confirmation link. Please try again.";
+    return { confirmationUrl: null, error: message };
+  }
+
+  const actor =
+    (session.onlineAccessInfo?.associated_user?.email as string | undefined) ??
+    session.shop;
+
+  await appendAudit(session.shop, {
+    action: "plan.changed",
+    actor,
+    payload: { requestedPlan: PLAN_NAME, trialDays },
+  });
+
+  return { confirmationUrl: result.confirmationUrl, error: null };
+};
+
 // The only plan. Named here so the component reads as "the plan", not "a plan".
 const PLAN = PLAN_DETAILS[0];
 
 export default function Billing() {
   const data = useLoaderData<typeof loader>();
+  const fetcher = useFetcher<typeof action>();
+  const busy = fetcher.state !== "idle";
+  const confirmationUrl = fetcher.data?.confirmationUrl ?? null;
+  const error = fetcher.data?.error ?? null;
+
+  /*
+   * Take the merchant to Shopify's approval screen.
+   *
+   * It lives in the admin, outside this iframe, so the top frame has to move.
+   * A frame is only allowed to do that with user activation, and the click that
+   * started this may no longer count by the time the response lands — so if the
+   * attempt is refused, the link below is rendered and the merchant clicks
+   * once more. Either way they get there, and neither path depends on a status
+   * code being interpreted correctly.
+   */
+  useEffect(() => {
+    if (!confirmationUrl) return;
+    try {
+      window.open(confirmationUrl, "_top");
+    } catch {
+      // Blocked. The fallback link is already on screen.
+    }
+  }, [confirmationUrl]);
   // hasActivePayment covers the trial too: Shopify reports a subscription in
   // its trial period as active, which is what we want — the merchant has
   // subscribed and should not be asked to again.
@@ -137,12 +249,29 @@ export default function Billing() {
           {isSubscribed ? (
             <s-badge tone="success">Subscribed</s-badge>
           ) : (
-            // target="_top" because the plan page lives in the Shopify admin,
-            // outside this app's iframe and will not render inside it. A
-            // user-initiated click may navigate the top frame.
-            <s-button variant="primary" href={data.planUrl} target="_top">
-              Choose a plan
-            </s-button>
+            <s-stack direction="block" gap="small">
+              <s-button
+                variant="primary"
+                disabled={boolAttr(busy)}
+                onClick={() => fetcher.submit({}, { method: "post" })}
+              >
+                {busy ? "Opening Shopify…" : "Subscribe"}
+              </s-button>
+
+              {confirmationUrl && (
+                <s-paragraph>
+                  <s-link href={confirmationUrl} target="_top">
+                    Continue to Shopify to approve the charge
+                  </s-link>
+                </s-paragraph>
+              )}
+
+              {error && (
+                <s-banner tone="critical">
+                  <s-paragraph>{error}</s-paragraph>
+                </s-banner>
+              )}
+            </s-stack>
           )}
         </s-stack>
       </s-section>

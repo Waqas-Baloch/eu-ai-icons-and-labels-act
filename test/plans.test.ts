@@ -2,14 +2,20 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
-  APP_HANDLE,
   PLAN_DETAILS,
+  PLAN_NAME,
   PLAN_PRICE_USD,
   PLAN_TRIAL_DAYS,
-  pricingPlansUrl,
 } from "~/lib/plans";
 
 describe("plans", () => {
+  // Comments are stripped: the source deliberately explains why certain calls
+  // are avoided, and a naive substring match would trip over the explanation.
+  const code = (path: string) =>
+    readFileSync(path, "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+
   it("offers exactly one plan", () => {
     expect(PLAN_DETAILS).toHaveLength(1);
   });
@@ -21,6 +27,7 @@ describe("plans", () => {
 
   it("displays the price it charges", () => {
     expect(PLAN_DETAILS[0].price).toBe("$6.99");
+    expect(PLAN_DETAILS[0].name).toBe(PLAN_NAME);
     expect(PLAN_DETAILS[0].trialDays).toBe(PLAN_TRIAL_DAYS);
   });
 
@@ -28,46 +35,45 @@ describe("plans", () => {
   // shopify.server.ts ever goes back to a literal, the merchant can be shown
   // one number and billed another — which is the one billing bug that is not
   // recoverable by apologising.
-  // Shopify App Pricing forbids an app from creating its own charges. Calling
-  // billing.request() is exactly that, and it is what an App Store reviewer hit
-  // as a 401. The app must send merchants to Shopify's plan page instead.
-  it("never creates its own subscription", () => {
-    // Comments are stripped first: the source deliberately *explains* why
-    // billing.request() cannot be used, and a naive substring match would trip
-    // over that explanation rather than over a real call.
-    const code = (path: string) =>
-      readFileSync(path, "utf8")
-        .replace(/\/\*[\s\S]*?\*\//g, "")
-        .replace(/^\s*\/\/.*$/gm, "");
-
-    const server = code("app/shopify.server.ts");
+  /*
+   * The app creates its own subscription through the Billing API.
+   *
+   * Verified against the live shop: appSubscriptionCreate succeeds and returns
+   * a confirmation URL, so this app is not on Shopify App Pricing — the public
+   * plan in the App Store listing is metadata describing the price, and
+   * /charges/<handle>/pricing_plans 404s because no managed plan exists.
+   */
+  it("creates the subscription itself and returns the confirmation URL", () => {
     const billing = code("app/routes/app.billing.tsx");
 
+    expect(billing).toContain("appSubscriptionCreate");
+    expect(billing).toContain("confirmationUrl");
+    expect(billing).toContain("PLAN_NAME");
+    expect(billing).toContain("PLAN_PRICE_USD");
+  });
+
+  /*
+   * Not billing.request(). It throws a redirect, which for a fetcher becomes a
+   * bare 401 carrying a reauthorize header — App Bridge protocol that any error
+   * boundary renders as "401 — Unauthorized". That is the failure an App Store
+   * reviewer reported.
+   */
+  it("never routes the subscription through a thrown redirect", () => {
+    const billing = code("app/routes/app.billing.tsx");
     expect(billing).not.toContain("billing.request(");
-    expect(server).not.toContain("billing: {");
-
-    // The merchant is sent to Shopify's own plan page, as a plain link.
-    expect(billing).toContain("pricingPlansUrl(session.shop)");
-    expect(billing).toContain('target="_top"');
-
-    // And not via an action. A fetcher POST + redirect(_top) throws a 401
-    // carrying a reauthorize header — App Bridge protocol that any error
-    // boundary will render as "401 — Unauthorized" instead of redirecting.
-    expect(billing).not.toContain("export const action");
+    expect(billing).not.toContain('target: "_top"');
   });
 
-  // A wrong handle sends merchants to a 404 at the moment they try to pay.
-  it("builds a plan URL whose handle matches shopify.app.toml", () => {
-    const toml = readFileSync("shopify.app.toml", "utf8");
-    expect(toml).toContain(`handle = "${APP_HANDLE}"`);
-
-    expect(pricingPlansUrl("nanoapps-uhu4sk0u.myshopify.com")).toBe(
-      `https://admin.shopify.com/store/nanoapps-uhu4sk0u/charges/${APP_HANDLE}/pricing_plans`,
-    );
+  // The merchant must always be able to reach Shopify, even if the automatic
+  // top-frame navigation is refused for want of user activation.
+  it("offers a visible link when the top frame cannot be moved", () => {
+    const billing = code("app/routes/app.billing.tsx");
+    expect(billing).toContain('window.open(confirmationUrl, "_top")');
+    expect(billing).toContain('href={confirmationUrl}');
   });
 
-  // Under App Pricing the subscription is named by Shopify, so filtering the
-  // check by plan name would silently lock a paying merchant out.
+  // Under any pricing model the subscription may be named by Shopify, so
+  // filtering the entitlement check by plan name can lock out a paying shop.
   it("checks for any active subscription, not a named plan", () => {
     for (const file of [
       "app/lib/entitlement.server.ts",
