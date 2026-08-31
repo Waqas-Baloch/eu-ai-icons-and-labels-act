@@ -1,0 +1,56 @@
+The app finds AI-generated product images, places the official EU AI Act
+label on them, and keeps an audit trail of every decision.
+
+BEFORE YOU START
+Use a development store with at least one product that has 2-3 images.
+No credentials are needed. Access is free for 7 days from install, with
+no card and no subscription, so the full app is available immediately.
+
+SETUP
+1. Install the app on your development store.
+2. You will land on Terms of use. Tick "I have read and understood these
+   terms" and press "Accept and continue". This gate is intentional -
+   nothing else is reachable until it is accepted.
+3. On Products, press "Scan catalog". The scan reads each image's
+   provenance metadata and lists your products.
+
+LABEL AN IMAGE
+4. Press "Open" on any product.
+5. Under "Which images are AI-generated?", tick one or more images. A
+   label appears on the preview immediately; unticking removes it.
+6. In the toolbox on the right, choose a Label type and Label style, drag
+   the size slider, and drag the label around the image. It always stays
+   at least 20 px from every edge.
+7. Press "Apply to selected images" to save.
+
+SEE IT ON THE STOREFRONT
+8. In your store admin go to Online Store > Themes > Customize.
+9. Open App embeds in the left sidebar and enable "AI disclosure".
+10. Save, then view the product page you labelled. The label appears on
+    the image in the position and size you chose.
+
+AUDIT TRAIL
+11. Open "Audit trail". Every decision is listed with a hash chain.
+    "Export CSV" downloads the full record.
+
+BILLING
+12. Open "Plan". It shows days remaining in the free trial and a single
+    $6.99/month plan. "Choose a plan" opens Shopify's own plan selection
+    page at /charges/<app-handle>/pricing_plans, because this app uses
+    Shopify App Pricing and must not create charges through the Billing
+    API. Charges are live, not test.
+
+    Note: on our dev store that page returns 404, matching the documented
+    behaviour for a draft app still in review. The app performs the
+    documented redirect with target="_top".
+
+TWO THINGS THAT LOOK LIKE BUGS BUT ARE NOT
+- Images usually come back as "Needs review" rather than being detected
+  automatically. Most images carry no C2PA/IPTC provenance metadata, and
+  the app never treats missing metadata as proof an image is not AI. It
+  asks you instead. Silently marking an unknown image as "not AI" would
+  under-disclose, which is the failure this app exists to prevent.
+- On a large catalog the scan stops after about 20 seconds and reports
+  partial progress. Press "Scan catalog" again to continue. Images already
+  assessed are not re-downloaded, so each run gets further. This bound
+  exists so the request cannot hang.

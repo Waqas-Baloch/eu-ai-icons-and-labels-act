@@ -1,0 +1,30 @@
+Thank you for the detailed report and the screencast — the 401 was real and
+we have fixed it. There were three separate causes.
+
+1. The app was calling the Billing API to create the subscription
+   (appSubscriptionCreate, via billing.request). Because we have a public plan
+   defined, the app is on Shopify App Pricing, which forbids that call. The app
+   now sends the merchant to the plan selection page at
+   /charges/<app-handle>/pricing_plans with target="_top", as documented, and
+   no longer creates charges itself. The billing configuration has been removed.
+
+2. Our entitlement check filtered active subscriptions by plan name. Under
+   Shopify App Pricing the subscription is named by Shopify, so that filter
+   could report a paying merchant as unsubscribed. It now accepts any active
+   subscription.
+
+3. Our /auth/login route started OAuth on a GET whenever the request carried a
+   shop parameter. Inside the admin frame that rendered as
+   "accounts.shopify.com refused to connect", which is the second failure
+   visible in your screencast. OAuth now starts only from an explicit POST, and
+   an embedded request is sent back into the app so token exchange handles the
+   session.
+
+All three are deployed and verified against production.
+
+One thing we could not resolve from our side. On our development store the plan
+selection page itself returns 404, with the app handle correct, the plan
+configured ($6.99/month, handle "unlimited"), and the store and listing both
+set to English. This matches the documented behaviour for a draft app whose
+listing is still in review. If you can see a cause on your side we would be
+grateful to know, and we will fix it immediately.
