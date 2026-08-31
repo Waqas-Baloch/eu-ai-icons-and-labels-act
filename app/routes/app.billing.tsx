@@ -4,20 +4,17 @@ import { useFetcher, useLoaderData } from "@remix-run/react";
 import prisma from "~/db.server";
 import { authenticate } from "~/shopify.server";
 import { appendAudit } from "~/lib/audit.server";
-import { isPlanName, PLANS, PLAN_DETAILS } from "~/lib/plans";
-import {
-  accessState,
-  shopifyTrialDaysFor,
-  trialDaysRemaining,
-} from "~/lib/entitlement";
+import { PLAN_DETAILS, pricingPlansUrl } from "~/lib/plans";
+import { accessState, trialDaysRemaining } from "~/lib/entitlement";
 import { boolAttr } from "~/lib/polaris-form";
 import { formatDateTime } from "~/lib/display";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { billing, session } = await authenticate.admin(request);
 
+  // No `plans` filter: Shopify names the subscription under App Pricing, and
+  // this app has exactly one plan, so any active subscription is the answer.
   const check = await billing.check({
-    plans: [PLANS.UNLIMITED],
     isTest: process.env.SHOPIFY_BILLING_TEST !== "0",
   });
 
@@ -44,13 +41,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { billing, session } = await authenticate.admin(request);
-  const form = await request.formData();
-  const plan = String(form.get("plan") ?? "");
-
-  if (!isPlanName(plan)) {
-    return { ok: false, error: "Unknown plan." };
-  }
+  const { session, redirect } = await authenticate.admin(request);
 
   const actor =
     (session.onlineAccessInfo?.associated_user?.email as string | undefined) ??
@@ -59,27 +50,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   await appendAudit(session.shop, {
     action: "plan.changed",
     actor,
-    payload: { requestedPlan: plan },
+    payload: { action: "opened Shopify plan selection" },
   });
 
-  // Hand Shopify whatever is left of our own free week, so approving early
-  // costs the merchant nothing: the first charge still falls at the end of the
-  // week they were promised. Zero once the trial has run out, which bills on
-  // approval. The billing config's trialDays is 0 for the same reason — a
-  // standing 7 there would stack on top of this and give away fourteen days.
-  const shop = await prisma.shop.findUnique({ where: { domain: session.shop } });
-  const trialDays = shopifyTrialDaysFor(shop?.trialEndsAt, new Date());
-
-  // Throws a redirect to Shopify's confirmation screen; the merchant approves
-  // the charge there, and Shopify returns them to the app.
-  await billing.request({
-    plan,
-    isTest: process.env.SHOPIFY_BILLING_TEST !== "0",
-    trialDays,
-    returnUrl: `${process.env.SHOPIFY_APP_URL}/app/billing`,
-  });
-
-  return { ok: true };
+  // Send the merchant to Shopify's own plan page rather than creating the
+  // subscription here.
+  //
+  // This app is on Shopify App Pricing: the plan is defined in the Partner
+  // Dashboard and Shopify runs the checkout. An app with App Pricing enabled is
+  // forbidden from calling appSubscriptionCreate — Shopify rejects it with
+  // "Managed Pricing Apps cannot use the Billing API", which an App Store
+  // reviewer saw as a 401 when trying to subscribe. billing.request() is
+  // exactly that call, so it cannot be used here.
+  //
+  // target "_top" because the plan page lives in the Shopify admin, outside
+  // this app's iframe, and will not render inside it.
+  throw redirect(pricingPlansUrl(session.shop), { target: "_top" });
 };
 
 // The only plan. Named here so the component reads as "the plan", not "a plan".
@@ -122,9 +108,9 @@ export default function Billing() {
           <s-paragraph>
             No card needed until it ends
             {data.trialEndsAt ? ` on ${formatDateTime(data.trialEndsAt)}` : ""}.
-            You have the full app, not a reduced version. Subscribing now does
-            not shorten the trial — your first charge still falls at the end of
-            it.
+            You have the full app, not a reduced version. There is no need to
+            choose a plan before then — if you do, billing starts straight away
+            rather than when the trial would have ended.
           </s-paragraph>
         </s-banner>
       )}
@@ -173,22 +159,12 @@ export default function Billing() {
             <s-button
               variant="primary"
               disabled={boolAttr(busy)}
-              onClick={() => fetcher.submit({ plan: PLAN.name }, { method: "post" })}
+              onClick={() => fetcher.submit({}, { method: "post" })}
             >
-              {busy
-                ? "Opening Shopify…"
-                : data.access === "trial"
-                  ? "Subscribe now"
-                  : "Subscribe"}
+              {busy ? "Opening Shopify…" : "Choose a plan"}
             </s-button>
           )}
         </s-stack>
-
-        {fetcher.data && "error" in fetcher.data && fetcher.data.error && (
-          <s-banner tone="critical">
-            <s-paragraph>{fetcher.data.error}</s-paragraph>
-          </s-banner>
-        )}
       </s-section>
 
       <s-section heading="What you keep">

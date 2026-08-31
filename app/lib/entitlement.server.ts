@@ -1,7 +1,6 @@
 import type { authenticate } from "~/shopify.server";
 
 import prisma from "~/db.server";
-import { PLANS } from "~/lib/plans";
 import { accessState, trialDaysRemaining, trialEndFrom } from "~/lib/entitlement";
 import type { AccessState } from "~/lib/entitlement";
 
@@ -53,8 +52,12 @@ export async function resolveEntitlement(
   let hasActivePayment = false;
   if (trialDaysLeft === 0) {
     try {
+      // No `plans` filter on purpose. Under Shopify App Pricing the plans are
+      // defined in the Partner Dashboard, and the subscription comes back named
+      // by whatever Shopify chose — the plan's display name or its handle. This
+      // app has exactly one plan, so "any active subscription" is the correct
+      // question, and asking it this way cannot be broken by a rename.
       const check = await billing.check({
-        plans: [PLANS.UNLIMITED],
         isTest: process.env.SHOPIFY_BILLING_TEST !== "0",
       });
       hasActivePayment = check.hasActivePayment;
@@ -72,9 +75,10 @@ export async function resolveEntitlement(
   // Keep Shop.plan truthful. Nothing reads it for entitlement — billing.check
   // is the source of truth — but it was previously never written at all, so the
   // column said "none" for paying shops and would mislead anyone reading the
-  // table. Written only when it actually changes, so this stays a no-op on the
-  // overwhelming majority of loads.
-  const plan = access === "subscribed" ? PLANS.UNLIMITED : "none";
+  // table. It records whether the shop is paying, not which plan: under Shopify
+  // App Pricing the plan is Shopify's to name, not ours. Written only when it
+  // changes, so this is a no-op on the overwhelming majority of loads.
+  const plan = access === "subscribed" ? "subscribed" : "none";
   if (shop && shop.plan !== plan) {
     await prisma.shop.update({ where: { domain: shopDomain }, data: { plan } });
   }

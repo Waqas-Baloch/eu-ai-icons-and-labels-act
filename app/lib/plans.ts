@@ -20,11 +20,31 @@
 
 import { TRIAL_DAYS } from "./entitlement";
 
-export const PLANS = {
-  UNLIMITED: "Unlimited",
-} as const;
+/**
+ * The app handle, as it appears in shopify.app.toml.
+ *
+ * Needed to build the Shopify App Pricing plan page URL. A test asserts the two
+ * stay in step, because a wrong handle here sends merchants to a 404 at exactly
+ * the moment they are trying to pay.
+ */
+export const APP_HANDLE = "eu-ai-icons-and-labels-act";
 
-export type PlanName = (typeof PLANS)[keyof typeof PLANS];
+/**
+ * Where a merchant chooses and approves a plan.
+ *
+ * Under Shopify App Pricing the plans live in the Partner Dashboard and Shopify
+ * runs the checkout. The app does not — and may not — create the subscription
+ * itself: once App Pricing is enabled, appSubscriptionCreate is rejected with
+ * "Managed Pricing Apps cannot use the Billing API". That rejection is what an
+ * App Store reviewer saw as a 401 when trying to subscribe.
+ *
+ * The page lives in the Shopify admin, outside this app's iframe, so it must be
+ * opened with target "_top".
+ */
+export function pricingPlansUrl(shopDomain: string): string {
+  const storeHandle = shopDomain.replace(/\.myshopify\.com$/, "");
+  return `https://admin.shopify.com/store/${storeHandle}/charges/${APP_HANDLE}/pricing_plans`;
+}
 
 /** USD per 30 days. Mirrored in the billing config in shopify.server.ts. */
 export const PLAN_PRICE_USD = 6.99;
@@ -39,7 +59,7 @@ export const PLAN_PRICE_USD = 6.99;
 export const PLAN_TRIAL_DAYS = TRIAL_DAYS;
 
 export interface PlanDetail {
-  name: PlanName;
+  name: string;
   price: string;
   trialDays: number;
   blurb: string;
@@ -48,7 +68,7 @@ export interface PlanDetail {
 
 export const PLAN_DETAILS: PlanDetail[] = [
   {
-    name: PLANS.UNLIMITED,
+    name: "Unlimited",
     price: `$${PLAN_PRICE_USD.toFixed(2)}`,
     trialDays: PLAN_TRIAL_DAYS,
     blurb: "Everything, for one price per store.",
@@ -61,7 +81,3 @@ export const PLAN_DETAILS: PlanDetail[] = [
     ],
   },
 ];
-
-export function isPlanName(value: string): value is PlanName {
-  return (Object.values(PLANS) as string[]).includes(value);
-}
