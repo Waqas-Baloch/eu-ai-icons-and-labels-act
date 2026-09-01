@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  adminAppUrl,
+  APP_HANDLE,
   PLAN_DETAILS,
   PLAN_NAME,
   PLAN_PRICE_USD,
@@ -70,6 +72,34 @@ describe("plans", () => {
     const billing = code("app/routes/app.billing.tsx");
     expect(billing).toContain('window.open(confirmationUrl, "_top")');
     expect(billing).toContain('href={confirmationUrl}');
+  });
+
+  /*
+   * Where Shopify sends the merchant after they approve the charge.
+   *
+   * SHOPIFY_APP_URL carries no shop, host or embedded parameters, so a merchant
+   * returning to it cannot be identified and is bounced to the login form and
+   * asked to type a myshopify domain. An App Store reviewer hit exactly that
+   * after approving, on a bare page outside the admin.
+   */
+  it("returns the merchant into the embedded admin, not the bare app URL", () => {
+    const billing = code("app/routes/app.billing.tsx");
+
+    expect(billing).toContain('adminAppUrl(session.shop, "/app/billing")');
+    expect(billing).not.toContain("${process.env.SHOPIFY_APP_URL}/app/billing");
+  });
+
+  it("builds an admin URL whose handle matches shopify.app.toml", () => {
+    const toml = readFileSync("shopify.app.toml", "utf8");
+    expect(toml).toContain(`handle = "${APP_HANDLE}"`);
+
+    expect(adminAppUrl("nanoapps-uhu4sk0u.myshopify.com", "/app/billing")).toBe(
+      `https://admin.shopify.com/store/nanoapps-uhu4sk0u/apps/${APP_HANDLE}/app/billing`,
+    );
+    // Works without a path too, for a plain "open the app" link.
+    expect(adminAppUrl("cool-shop.myshopify.com")).toBe(
+      `https://admin.shopify.com/store/cool-shop/apps/${APP_HANDLE}`,
+    );
   });
 
   // Under any pricing model the subscription may be named by Shopify, so

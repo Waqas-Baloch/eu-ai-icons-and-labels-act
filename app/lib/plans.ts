@@ -32,6 +32,31 @@ import { TRIAL_DAYS } from "./entitlement";
  */
 export const PLAN_NAME = "Unlimited";
 
+/**
+ * The app handle, exactly as it appears in shopify.app.toml.
+ *
+ * A test asserts the two stay in step: a wrong handle here sends a merchant who
+ * has just paid to a 404.
+ */
+export const APP_HANDLE = "eu-ai-icons-and-labels-act";
+
+/**
+ * The app's own URL *inside the Shopify admin*.
+ *
+ * Anywhere Shopify sends a merchant back to this app must use this, not
+ * SHOPIFY_APP_URL. The raw app URL carries no shop, host or embedded params, so
+ * authenticate.admin() cannot tell which shop is asking and redirects to the
+ * login form — which is how a reviewer, having just approved a charge, ended up
+ * being asked to type in a myshopify domain on a bare page outside the admin.
+ *
+ * This URL lands them back in the embedded app, with Shopify supplying the
+ * parameters that make the session resolvable.
+ */
+export function adminAppUrl(shopDomain: string, path = ""): string {
+  const storeHandle = shopDomain.replace(/\.myshopify\.com$/, "");
+  return `https://admin.shopify.com/store/${storeHandle}/apps/${APP_HANDLE}${path}`;
+}
+
 /** USD per 30 days. Mirrored in the billing config in shopify.server.ts. */
 export const PLAN_PRICE_USD = 6.99;
 

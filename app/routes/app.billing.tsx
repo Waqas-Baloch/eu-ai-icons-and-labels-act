@@ -4,7 +4,12 @@ import { useFetcher, useLoaderData } from "@remix-run/react";
 
 import prisma from "~/db.server";
 import { authenticate } from "~/shopify.server";
-import { PLAN_DETAILS, PLAN_NAME, PLAN_PRICE_USD } from "~/lib/plans";
+import {
+  adminAppUrl,
+  PLAN_DETAILS,
+  PLAN_NAME,
+  PLAN_PRICE_USD,
+} from "~/lib/plans";
 import { appendAudit } from "~/lib/audit.server";
 import {
   accessState,
@@ -93,7 +98,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const response = await admin.graphql(SUBSCRIPTION_CREATE, {
     variables: {
       name: PLAN_NAME,
-      returnUrl: `${process.env.SHOPIFY_APP_URL}/app/billing`,
+      // Back into the embedded app, not the bare app URL — see adminAppUrl().
+      returnUrl: adminAppUrl(session.shop, "/app/billing"),
       test: process.env.SHOPIFY_BILLING_TEST !== "0",
       trialDays,
       lineItems: [
@@ -169,6 +175,7 @@ export default function Billing() {
       // Blocked. The fallback link is already on screen.
     }
   }, [confirmationUrl]);
+
   // hasActivePayment covers the trial too: Shopify reports a subscription in
   // its trial period as active, which is what we want — the merchant has
   // subscribed and should not be asked to again.
@@ -201,9 +208,9 @@ export default function Billing() {
           <s-paragraph>
             No card needed until it ends
             {data.trialEndsAt ? ` on ${formatDateTime(data.trialEndsAt)}` : ""}.
-            You have the full app, not a reduced version. There is no need to
-            choose a plan before then — if you do, billing starts straight away
-            rather than when the trial would have ended.
+            You have the full app, not a reduced version. Subscribing now does
+            not shorten the trial — your first charge still falls at the end of
+            it.
           </s-paragraph>
         </s-banner>
       )}
