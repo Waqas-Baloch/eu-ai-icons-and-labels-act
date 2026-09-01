@@ -1,44 +1,39 @@
-Subject: 1.2.2 — 401 on subscribe, fixed and verified
+Subject: 1.2.2 — prompted for a myshopify URL after approving, fixed
 
-Thank you for the report and the screencast. Both failures were ours and both
-are fixed. Here is what was wrong and what we changed.
+Thank you for retesting and for the recording. You are right, and the cause was
+ours.
 
-THE 401 ON SUBSCRIBE
+WHAT WAS WRONG
 
-The subscription itself was never rejected by Shopify. Our app called
-billing.request(), which throws a redirect to the charge approval screen. For a
-fetcher submission that redirect is returned as a 401 carrying
-X-Shopify-API-Request-Failure-Reauthorize-Url — an App Bridge instruction
-rather than a failure. We had recently added a global error boundary that
-rendered any thrown response as an error page, so it turned that instruction
-into a page reading "401 — Unauthorized" and the redirect never happened.
+The subscription's returnUrl was our app's own URL,
+https://eu-ai-labels.onrender.com/app/billing. That address carries no shop,
+host or embedded parameter, so a merchant arriving on it after approving cannot
+be identified. Our authentication finds no shop, redirects to the login path,
+and the login form asks for a myshopify domain — which is the page in your
+recording. A merchant who has just paid is dropped outside the admin and handed
+a form they cannot usefully complete.
 
-Fixed in two parts:
+WHAT WE CHANGED
 
-- The subscription is now created explicitly with appSubscriptionCreate, and
-  the confirmation URL is returned to the page as data. The page moves the top
-  frame to it and also renders it as a visible link, so the merchant reaches
-  the approval screen whether or not the automatic navigation is permitted.
-  Nothing depends on a status code being interpreted correctly.
+returnUrl is now the app's URL inside the Shopify admin:
 
-- The error boundary no longer renders 401 or 410 as errors. Both are App
-  Bridge protocol: 401 asks it to move the top frame, 410 to retry with a fresh
-  session token.
+  https://admin.shopify.com/store/<store>/apps/<app-handle>/app/billing
 
-THE SECOND FAILURE IN YOUR SCREENCAST
-
-The recording also shows "accounts.shopify.com refused to connect". Our
-/auth/login route called shopify.login() from its loader, which starts OAuth as
-soon as a request carries a shop parameter. Inside the admin frame that is
-unreachable, since the OAuth page cannot be framed. OAuth now starts only from
-an explicit POST, and an embedded request is sent back into the app so token
-exchange establishes the session.
+Approving now returns the merchant to the app's Plan page in the embedded
+admin, with Shopify supplying the parameters that make the session resolvable.
+A test asserts the app handle in that URL matches shopify.app.toml, so a wrong
+handle cannot silently send a paying merchant to a 404.
 
 VERIFIED
 
-We have re-tested on our development store. Pressing Subscribe now reaches the
-Shopify approval screen showing "Plan: Unlimited, $6.99 USD every 30 days" with
-the remaining free-trial days applied, so a merchant who subscribes early is
-not charged before their trial would have ended.
+We have confirmed the destination loads correctly in the embedded admin: the
+Plan page renders with the plan, price and remaining trial days, and no login
+form appears at any point.
 
-Both fixes are deployed. We are ready for re-review.
+One note on our development store: it has no payment method on file, so the
+Approve button is disabled there and we cannot complete the final approval
+ourselves. We have verified everything either side of that step — the charge is
+requested correctly, the approval screen shows the right plan and trial, and
+the return destination resolves in the admin.
+
+Deployed and ready for re-review.
