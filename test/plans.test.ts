@@ -102,6 +102,35 @@ describe("plans", () => {
     );
   });
 
+  /*
+   * A reviewer's subscription is a test subscription.
+   *
+   * Shopify forces test charges on App Store review stores. billing.check with
+   * isTest: false discards them — the library's rule is (isTest ||
+   * !subscription.test) — so a reviewer who has just approved a charge is told
+   * to subscribe again, and the paywall stays shut. Observed directly: an
+   * ACTIVE subscription with test: true went unrecognised.
+   *
+   * Creating charges is still governed by SHOPIFY_BILLING_TEST, which stays 0
+   * in production. This only widens what counts as already paid.
+   */
+  it("counts a test subscription as paid, so review stores work", () => {
+    for (const file of [
+      "app/lib/entitlement.server.ts",
+      "app/routes/app.billing.tsx",
+    ]) {
+      const call = code(file).slice(code(file).indexOf("billing.check("));
+      expect(call.slice(0, 120), file).toContain("isTest: true");
+      expect(call.slice(0, 120), file).not.toContain("SHOPIFY_BILLING_TEST");
+    }
+  });
+
+  // Charges themselves must still be real in production.
+  it("still creates real charges when SHOPIFY_BILLING_TEST is 0", () => {
+    const billing = code("app/routes/app.billing.tsx");
+    expect(billing).toContain('test: process.env.SHOPIFY_BILLING_TEST !== "0"');
+  });
+
   // Under any pricing model the subscription may be named by Shopify, so
   // filtering the entitlement check by plan name can lock out a paying shop.
   it("checks for any active subscription, not a named plan", () => {

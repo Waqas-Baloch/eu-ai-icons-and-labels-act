@@ -57,9 +57,17 @@ export async function resolveEntitlement(
       // by whatever Shopify chose — the plan's display name or its handle. This
       // app has exactly one plan, so "any active subscription" is the correct
       // question, and asking it this way cannot be broken by a rename.
-      const check = await billing.check({
-        isTest: process.env.SHOPIFY_BILLING_TEST !== "0",
-      });
+      // isTest: true means "a test subscription also counts", not "create test
+      // charges". Shopify forces test charges on App Store review stores, so a
+      // reviewer who subscribes gets an ACTIVE subscription with test: true —
+      // and checking with isTest: false discards exactly that, leaving the app
+      // insisting they subscribe again. Verified: an active test subscription
+      // on the store was not recognised while this was false.
+      //
+      // Safe, because a merchant cannot create a test charge. Only this app
+      // can, and what it creates is governed by SHOPIFY_BILLING_TEST below,
+      // which stays 0 in production so real merchants are charged for real.
+      const check = await billing.check({ isTest: true });
       hasActivePayment = check.hasActivePayment;
     } catch (error) {
       console.error(

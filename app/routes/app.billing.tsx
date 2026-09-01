@@ -22,11 +22,14 @@ import { boolAttr } from "~/lib/polaris-form";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { billing, session } = await authenticate.admin(request);
 
-  // No `plans` filter: Shopify names the subscription under App Pricing, and
-  // this app has exactly one plan, so any active subscription is the answer.
-  const check = await billing.check({
-    isTest: process.env.SHOPIFY_BILLING_TEST !== "0",
-  });
+  // No `plans` filter: this app has exactly one plan, so any active
+  // subscription is the answer, and a rename cannot break the check.
+  //
+  // isTest: true means "a test subscription also counts". Shopify forces test
+  // charges on App Store review stores, and checking with isTest: false throws
+  // exactly those away — leaving a reviewer who has just subscribed being told
+  // to subscribe again. See app/lib/entitlement.server.ts.
+  const check = await billing.check({ isTest: true });
 
   const [productCount, shop] = await Promise.all([
     prisma.productAssessment.count({ where: { shopDomain: session.shop } }),
