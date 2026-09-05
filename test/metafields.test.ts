@@ -151,3 +151,62 @@ describe("storefront/server key parity", () => {
     expect(fileKey(`${CDN}/carrots_800x.jpg?v=1`)).toBe("carrots.jpg");
   });
 });
+
+/**
+ * The webhook feedback loop.
+ *
+ * Publishing a decision writes product metafields. That fires products/update,
+ * which this app subscribes to and answers by re-assessing the product, which
+ * publishes again. Because assessed_at carried a fresh timestamp on every pass,
+ * every write was a change and the cycle never converged: roughly 3,000
+ * assessments an hour on one merchant's catalogue, 1.37 million audit rows, and
+ * a server killed repeatedly by its memory limit.
+ *
+ * The cycle is broken by writing only when the decision actually changed. These
+ * assert the shape of that guard, since a unit test cannot run the loop.
+ */
+describe("publishing cannot feed itself", () => {
+  const source = readFileSync("app/lib/metafields.server.ts", "utf8");
+  const scan = readFileSync("app/lib/scan.server.ts", "utf8");
+
+  it("reads the current metafields before writing", () => {
+    expect(source).toContain("READ_METAFIELDS");
+    expect(source).toContain("const unchanged =");
+    expect(source).toContain("if (unchanged) return");
+  });
+
+  it("compares state, label and images", () => {
+    const guard = source.slice(
+      source.indexOf("const unchanged ="),
+      source.indexOf("if (unchanged) return"),
+    );
+    expect(guard).toContain("METAFIELD_KEYS.STATE");
+    expect(guard).toContain("METAFIELD_KEYS.LABEL");
+    expect(guard).toContain("METAFIELD_KEYS.IMAGES");
+  });
+
+  /*
+   * assessed_at differs on every assessment. Including it in the comparison
+   * would make every write a change again and restore the loop exactly.
+   */
+  it("excludes assessed_at from the comparison", () => {
+    const guard = source.slice(
+      source.indexOf("const unchanged ="),
+      source.indexOf("if (unchanged) return"),
+    );
+    expect(guard).not.toContain("ASSESSED_AT");
+  });
+
+  // Two encodings of one decision must not read as different.
+  it("serialises the image map canonically", () => {
+    expect(source).toContain("function canonicalJson");
+    expect(source).toContain("value: imagesJson,");
+    expect(source).not.toContain("JSON.stringify(imageMap)");
+  });
+
+  it("only records an audit entry when something changed", () => {
+    expect(scan).toContain("const assessmentChanged =");
+    expect(scan).toContain("if (assessmentChanged) await appendAudit");
+    expect(scan).toContain("if (published.changed !== false)");
+  });
+});

@@ -182,6 +182,35 @@ export interface ProductDecision {
   images: ImageDecision[];
 }
 
+const READ_METAFIELDS = `#graphql
+  query DisclosureMetafields($id: ID!) {
+    product(id: $id) {
+      metafields(first: 10, namespace: "${METAFIELD_NAMESPACE}") {
+        nodes { key value }
+      }
+    }
+  }
+`;
+
+/**
+ * JSON with object keys sorted, so an unchanged decision always serialises to
+ * the same string.
+ *
+ * Without this the comparison below could see two byte-different encodings of
+ * an identical decision, write anyway, and the loop would never converge.
+ */
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, val) =>
+    val && typeof val === "object" && !Array.isArray(val)
+      ? Object.fromEntries(
+          Object.keys(val as Record<string, unknown>)
+            .sort()
+            .map((key) => [key, (val as Record<string, unknown>)[key]]),
+        )
+      : val,
+  );
+}
+
 /**
  * Writes one product's decisions.
  *
@@ -189,11 +218,23 @@ export interface ProductDecision {
  * to reach it: an app block iterating `product.images` in Liquid knows each
  * image's numeric id, while the JS overlay only sees rendered `<img>` URLs.
  * Publishing both indexes means neither path has to guess.
+ *
+ * Writes only when something actually changed. This is not an optimisation: a
+ * metafield write fires products/update, which this app subscribes to and
+ * answers by re-assessing the product, which published again. The assessed_at
+ * timestamp differed on every pass, so every write was a change and the cycle
+ * could not converge. It ran at roughly 3,000 assessments an hour on one
+ * merchant's catalogue, wrote 1.37 million audit rows, and exhausted the
+ * server's memory until Render restarted it.
+ *
+ * assessed_at is deliberately excluded from the comparison — it is metadata
+ * about when we looked, not part of the decision, and comparing it would
+ * restore the loop exactly.
  */
 export async function publishProductDecision(
   admin: AdminGraphqlClient,
   decision: ProductDecision,
-): Promise<{ ok: boolean; errors: UserError[] }> {
+): Promise<{ ok: boolean; errors: UserError[]; changed?: boolean }> {
   type Entry = {
     state: string;
     label: string;
@@ -236,6 +277,28 @@ export async function publishProductDecision(
   }
 
   const imageMap = { byId, byFile };
+  const imagesJson = canonicalJson(imageMap);
+
+  // What is already on the product?
+  const currentResponse = await admin.graphql(READ_METAFIELDS, {
+    variables: { id: decision.productId },
+  });
+  const currentBody = (await currentResponse.json()) as {
+    data?: { product?: { metafields?: { nodes?: { key: string; value: string }[] } } };
+  };
+  const current = new Map(
+    (currentBody.data?.product?.metafields?.nodes ?? []).map((node) => [
+      node.key,
+      node.value,
+    ]),
+  );
+
+  const unchanged =
+    current.get(METAFIELD_KEYS.STATE) === decision.state &&
+    current.get(METAFIELD_KEYS.LABEL) === decision.label &&
+    current.get(METAFIELD_KEYS.IMAGES) === imagesJson;
+
+  if (unchanged) return { ok: true, errors: [], changed: false };
 
   const response = await admin.graphql(SET_METAFIELDS, {
     variables: {
@@ -258,7 +321,7 @@ export async function publishProductDecision(
           ownerId: decision.productId,
           namespace: METAFIELD_NAMESPACE,
           key: METAFIELD_KEYS.IMAGES,
-          value: JSON.stringify(imageMap),
+          value: imagesJson,
           type: "json",
         },
         {
@@ -276,7 +339,7 @@ export async function publishProductDecision(
     data?: { metafieldsSet?: { userErrors?: UserError[] } };
   };
   const errors = body.data?.metafieldsSet?.userErrors ?? [];
-  return { ok: errors.length === 0, errors };
+  return { ok: errors.length === 0, errors, changed: true };
 }
 
 /** Extracts the trailing numeric id from a Shopify gid. */

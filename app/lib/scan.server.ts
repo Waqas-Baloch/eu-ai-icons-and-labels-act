@@ -468,7 +468,18 @@ export async function assessProduct(
       },
     });
 
-    await appendAudit(shopDomain, {
+    // Only record an assessment that concluded something new. Re-checking an
+    // image and reaching the same answer is not an event worth a row: it says
+    // nothing a reader of the trail needs, and at webhook frequency it is what
+    // turned this table into 1.37 million rows.
+    const assessmentChanged =
+      !existing ||
+      existing.disclosureState !== assessment.disclosureState ||
+      existing.labelVariant !== assessment.labelVariant ||
+      existing.detectedOrigin !== detected.origin ||
+      existing.provenanceSource !== detected.source;
+
+    if (assessmentChanged) await appendAudit(shopDomain, {
       action: "image.assessed",
       actor: "system",
       subject: media.id,
@@ -519,7 +530,7 @@ export async function assessProduct(
     },
   });
 
-  await publishProductDecision(admin, {
+  const published = await publishProductDecision(admin, {
     productId: product.id,
     state: rolled.disclosureState,
     label: rolled.labelVariant,
@@ -527,16 +538,21 @@ export async function assessProduct(
     images: imageDecisions,
   });
 
-  await appendAudit(shopDomain, {
-    action: "product.published",
-    actor: "system",
-    subject: product.id,
-    payload: {
-      disclosureState: rolled.disclosureState,
-      labelVariant: rolled.labelVariant,
-      imageCount: imageDecisions.length,
-    },
-  });
+  // "published" means the storefront changed. When nothing was written there is
+  // nothing to record, and recording it anyway is what filled the trail with
+  // 213,691 entries saying the same thing.
+  if (published.changed !== false) {
+    await appendAudit(shopDomain, {
+      action: "product.published",
+      actor: "system",
+      subject: product.id,
+      payload: {
+        disclosureState: rolled.disclosureState,
+        labelVariant: rolled.labelVariant,
+        imageCount: imageDecisions.length,
+      },
+    });
+  }
 
   return { imagesSeen: mediaImages.length, imagesFlagged };
 }
