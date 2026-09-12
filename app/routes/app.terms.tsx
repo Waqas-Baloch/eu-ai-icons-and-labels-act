@@ -10,12 +10,19 @@ import { formatDateTime } from "~/lib/display";
 import { redirectEmbedded } from "~/lib/embedded-redirect.server";
 import { boolAttr } from "~/lib/polaris-form";
 import { useLiveFieldChecked } from "~/hooks/useFieldValues";
+import { reassessStored } from "~/lib/scan.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = await prisma.shop.findUnique({ where: { domain: session.shop } });
 
+  // Where the merchant was when the terms interrupted them, if anywhere.
+  // Only in-app paths, so this cannot be used to bounce them off-site.
+  const requested = new URL(request.url).searchParams.get("return");
+  const returnTo = requested?.startsWith("/app/") ? requested : null;
+
   return {
+    returnTo,
     terms: TERMS,
     version: TERMS_VERSION,
     accepted: shop?.termsVersion === TERMS_VERSION,
@@ -31,7 +38,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const shopDomain = session.shop;
 
   const actor =
@@ -65,7 +72,31 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     },
   });
 
-  throw redirectEmbedded(request, "/app");
+  // Release everything held back before this moment.
+  //
+  // While the terms were unaccepted the scan assessed products but published
+  // nothing to them, so the storefront and the app disagreed. Accepting is the
+  // point that resolves it: republish what is already known, so the labels the
+  // app has been showing the merchant actually appear on their products.
+  //
+  // Failure here must not cost the merchant their acceptance, which is already
+  // recorded above. The next scan or product edit republishes anything missed.
+  try {
+    await reassessStored(shopDomain, admin);
+  } catch (error) {
+    console.error(
+      `[${shopDomain}] publishing held-back labels after acceptance failed:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+
+  // Back to whatever the merchant was doing when the terms interrupted them.
+  // Read from the form rather than the URL: the submission does not
+  // necessarily carry the query string, and only in-app paths are honoured.
+  const form = await request.formData();
+  const requested = String(form.get("return") ?? "");
+  const safe = requested.startsWith("/app/") ? requested : "/app";
+  throw redirectEmbedded(request, safe);
 };
 
 // Named once so the checkbox and the hook watching it cannot drift apart.
@@ -94,10 +125,19 @@ export default function Terms() {
         <s-section>
           <s-paragraph>
             <s-text type="strong">
-              Please read this before using the app. You need to accept it to
-              continue.
+              {data.returnTo
+                ? "Before your first labels go live, please read and accept this."
+                : "Please read this. You will need to accept it before any label reaches your storefront."}
             </s-text>
           </s-paragraph>
+          {data.returnTo && (
+            <s-paragraph>
+              <s-text color="subdued">
+                Nothing has been published to your products yet. Accepting
+                applies the labels you just chose and takes you back.
+              </s-text>
+            </s-paragraph>
+          )}
           <s-paragraph>
             <s-text color="subdued">Version {data.version}</s-text>
           </s-paragraph>
@@ -142,7 +182,12 @@ export default function Terms() {
               <s-button
                 variant="primary"
                 disabled={boolAttr(!confirmed || busy)}
-                onClick={() => fetcher.submit({}, { method: "post" })}
+                onClick={() =>
+                  fetcher.submit(
+                    { return: data.returnTo ?? "" },
+                    { method: "post" },
+                  )
+                }
               >
                 {busy ? "Recording…" : "Accept and continue"}
               </s-button>

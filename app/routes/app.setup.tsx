@@ -10,6 +10,7 @@ import { boolAttr, collectFields } from "~/lib/polaris-form";
 import { useFieldValues } from "~/hooks/useFieldValues";
 import { redirectEmbedded } from "~/lib/embedded-redirect.server";
 import { requireUnlocked } from "~/lib/entitlement.server";
+import { requireTermsAccepted } from "~/lib/terms.server";
 
 /**
  * Guided setup.
@@ -67,6 +68,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // straight to this endpoint would still write for a shop that stopped
   // paying.
   await requireUnlocked(session.shop, billing);
+  await requireTermsAccepted(session.shop, request);
   const shopDomain = session.shop;
   const form = await request.formData();
   const intent = String(form.get("intent") ?? "");

@@ -10,6 +10,7 @@ import { describeState } from "~/lib/display";
 import { EmptyState } from "~/components/EmptyState";
 import { boolAttr } from "~/lib/polaris-form";
 import { requireUnlocked } from "~/lib/entitlement.server";
+import { hasAcceptedTerms } from "~/lib/terms.server";
 
 const PAGE_SIZE = 25;
 
@@ -104,6 +105,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     imagesResolved: imageTotal - (images.unknown ?? 0),
     needsReviewCount: productCounts.unknown ?? 0,
     chainValid: chain.valid,
+    termsAccepted: await hasAcceptedTerms(session.shop),
     products: products.map((product) => {
       const featured = product.images[0] ?? null;
       const unresolved = product.images.filter(
@@ -197,6 +199,22 @@ export default function Products() {
   return (
     <s-page heading="Products">
       {/* --- Status strip: one line, always the same shape --- */}
+      {/*
+        Deliberately a note, not a gate. The terms used to block the way in and
+        the one organic install this app had left at that screen without
+        scanning anything. Saying it is coming is enough; the gate itself sits
+        on the first publish, where the obligation actually arises.
+      */}
+      {!data.termsAccepted && (
+        <s-banner tone="info" heading="Terms to accept before your first labels go live">
+          <s-paragraph>
+            Scan and review as much as you like — nothing is written to your
+            products yet. You will be asked to accept the terms of use the first
+            time you apply a label.
+          </s-paragraph>
+        </s-banner>
+      )}
+
       <s-section>
         <s-stack direction="inline" gap="base" alignItems="center">
           {data.needsReviewCount > 0 ? (

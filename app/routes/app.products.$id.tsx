@@ -10,6 +10,7 @@ import { describeState, formatDateTime } from "~/lib/display";
 import { ProductEditor } from "~/components/ProductEditor";
 import editorStyles from "~/styles/editor.css?url";
 import { requireUnlocked } from "~/lib/entitlement.server";
+import { requireTermsAccepted } from "~/lib/terms.server";
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: editorStyles },
@@ -78,6 +79,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // straight to this endpoint would still write for a shop that stopped
   // paying.
   await requireUnlocked(session.shop, billing);
+
+  // The terms gate. Applying a label writes a disclosure to the merchant's
+  // live products, which is exactly what the terms govern — so this is where
+  // they are required, rather than on the way into the app. Redirects to the
+  // terms page carrying this path, so accepting returns them here.
+  await requireTermsAccepted(session.shop, request);
+
   const shopDomain = session.shop;
   const form = await request.formData();
 

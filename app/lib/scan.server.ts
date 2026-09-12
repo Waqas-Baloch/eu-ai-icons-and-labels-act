@@ -9,6 +9,7 @@
 import { createHash } from "node:crypto";
 
 import prisma from "~/db.server";
+import { hasAcceptedTerms } from "~/lib/terms.server";
 import { assessImage, rollUpProduct, ENGINE_VERSION } from "./compliance/article50";
 import { parseProvenance } from "./compliance/provenance";
 import type {
@@ -255,6 +256,8 @@ export async function scanCatalog(
   });
 
   const policy = await loadPolicy(shopDomain);
+  // Resolved once per run rather than per product: it cannot change mid-scan.
+  const publish = await hasAcceptedTerms(shopDomain);
   const totals: ScanResult = {
     productsSeen: 0,
     imagesSeen: 0,
@@ -292,7 +295,13 @@ export async function scanCatalog(
       if (!page) break;
 
       for (const product of page.nodes) {
-        const result = await assessProduct(admin, shopDomain, product, policy);
+        const result = await assessProduct(
+          admin,
+          shopDomain,
+          product,
+          policy,
+          publish,
+        );
         totals.productsSeen += 1;
         totals.imagesSeen += result.imagesSeen;
         totals.imagesFlagged += result.imagesFlagged;
@@ -335,12 +344,21 @@ export async function scanCatalog(
   }
 }
 
-/** Assesses one product's images and publishes the result. */
+/**
+ * Assesses one product's images and, if allowed, publishes the result.
+ *
+ * `publish` is false until the merchant has accepted the terms. Assessment is
+ * the app's own opinion and costs the merchant nothing; publishing writes to
+ * their products and is what the terms govern. Holding it back is what lets a
+ * merchant scan and explore before agreeing to anything — see
+ * app/lib/terms.server.ts. Accepting releases everything already assessed.
+ */
 export async function assessProduct(
   admin: AdminGraphqlClient,
   shopDomain: string,
   product: ProductNode,
   policy?: CompliancePolicy,
+  publish = true,
 ): Promise<{ imagesSeen: number; imagesFlagged: number }> {
   const effectivePolicy = policy ?? (await loadPolicy(shopDomain));
 
@@ -530,13 +548,15 @@ export async function assessProduct(
     },
   });
 
-  const published = await publishProductDecision(admin, {
-    productId: product.id,
-    state: rolled.disclosureState,
-    label: rolled.labelVariant,
-    assessedAt,
-    images: imageDecisions,
-  });
+  const published = publish
+    ? await publishProductDecision(admin, {
+        productId: product.id,
+        state: rolled.disclosureState,
+        label: rolled.labelVariant,
+        assessedAt,
+        images: imageDecisions,
+      })
+    : { ok: true, errors: [], changed: false };
 
   // "published" means the storefront changed. When nothing was written there is
   // nothing to record, and recording it anyway is what filled the trail with
@@ -576,7 +596,13 @@ export async function assessProductById(
   const body = (await response.json()) as { data?: { product?: ProductNode | null } };
   const product = body.data?.product;
   if (!product) return;
-  await assessProduct(admin, shopDomain, product);
+  await assessProduct(
+    admin,
+    shopDomain,
+    product,
+    undefined,
+    await hasAcceptedTerms(shopDomain),
+  );
 }
 
 /**
@@ -587,6 +613,17 @@ export async function reassessStored(
   shopDomain: string,
   admin?: AdminGraphqlClient,
 ): Promise<number> {
+  // Bounded for the same reason the scan is: this runs inside a request, and a
+  // large catalogue is two API calls per product. Anything not reached here is
+  // published by the next scan or product edit, so stopping early costs
+  // nothing but a delay.
+  const deadline = Date.now() + SCAN_TIME_BUDGET_MS;
+
+  // Same rule as the scan: assess freely, publish only once the merchant has
+  // accepted. This is reached from the settings page too, so without it a
+  // settings change would write labels to products before the terms were ever
+  // shown — the gate on the publish action alone would not have caught it.
+  const publish = await hasAcceptedTerms(shopDomain);
   const policy = await loadPolicy(shopDomain);
   const products = await prisma.productAssessment.findMany({
     where: { shopDomain },
@@ -596,6 +633,7 @@ export async function reassessStored(
   let updated = 0;
 
   for (const product of products) {
+    if (Date.now() > deadline) break;
     const assessments: Assessment[] = [];
     const imageDecisions: ImageDecision[] = [];
 
@@ -659,7 +697,7 @@ export async function reassessStored(
       },
     });
 
-    if (admin) {
+    if (admin && publish) {
       await publishProductDecision(admin, {
         productId: product.productId,
         state: rolled.disclosureState,

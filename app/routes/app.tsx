@@ -62,15 +62,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     include: { settings: true },
   });
 
-  // Hard gate. Nothing in the app is usable until the current terms are
-  // accepted — a merchant must not be able to publish a disclosure decision to
-  // a live storefront before agreeing who is responsible for it. Enforced in
-  // the layout loader so it covers every child route, including any added later.
+  // The terms are no longer a gate on the way in. They are enforced where they
+  // matter — the first publish — by requireTermsAccepted() in the actions that
+  // write to a merchant's products. See app/lib/terms.server.ts for why.
   const url = new URL(request.url);
-  const onTermsPage = url.pathname === "/app/terms";
-  if (!onTermsPage && shop?.termsVersion !== TERMS_VERSION) {
-    throw redirectEmbedded(request, "/app/terms");
-  }
 
   const { access, trialDaysLeft } = await resolveEntitlement(
     shopDomain,
