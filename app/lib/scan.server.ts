@@ -9,7 +9,7 @@
 import { createHash } from "node:crypto";
 
 import prisma from "~/db.server";
-import { hasAcceptedTerms } from "~/lib/terms.server";
+import { mayPublish } from "~/lib/entitlement.server";
 import { assessImage, rollUpProduct, ENGINE_VERSION } from "./compliance/article50";
 import { parseProvenance } from "./compliance/provenance";
 import type {
@@ -257,7 +257,7 @@ export async function scanCatalog(
 
   const policy = await loadPolicy(shopDomain);
   // Resolved once per run rather than per product: it cannot change mid-scan.
-  const publish = await hasAcceptedTerms(shopDomain);
+  const publish = await mayPublish(shopDomain, admin);
   const totals: ScanResult = {
     productsSeen: 0,
     imagesSeen: 0,
@@ -347,11 +347,13 @@ export async function scanCatalog(
 /**
  * Assesses one product's images and, if allowed, publishes the result.
  *
- * `publish` is false until the merchant has accepted the terms. Assessment is
- * the app's own opinion and costs the merchant nothing; publishing writes to
- * their products and is what the terms govern. Holding it back is what lets a
- * merchant scan and explore before agreeing to anything — see
- * app/lib/terms.server.ts. Accepting releases everything already assessed.
+ * `publish` is false until the shop is entitled to publish: terms accepted,
+ * and inside the trial or subscribed. Assessment is the app's own opinion and
+ * costs the merchant nothing; publishing writes to their products, which is
+ * both what the terms govern and what they are paying for. Holding it back is
+ * what lets a merchant scan and explore before agreeing to anything — see
+ * mayPublish() in app/lib/entitlement.server.ts. Whichever condition was
+ * missing, satisfying it releases everything already assessed.
  */
 export async function assessProduct(
   admin: AdminGraphqlClient,
@@ -601,7 +603,7 @@ export async function assessProductById(
     shopDomain,
     product,
     undefined,
-    await hasAcceptedTerms(shopDomain),
+    await mayPublish(shopDomain, admin),
   );
 }
 
@@ -619,11 +621,11 @@ export async function reassessStored(
   // nothing but a delay.
   const deadline = Date.now() + SCAN_TIME_BUDGET_MS;
 
-  // Same rule as the scan: assess freely, publish only once the merchant has
-  // accepted. This is reached from the settings page too, so without it a
-  // settings change would write labels to products before the terms were ever
-  // shown — the gate on the publish action alone would not have caught it.
-  const publish = await hasAcceptedTerms(shopDomain);
+  // Same rule as the scan: assess freely, publish only if the shop is entitled
+  // to. This is reached from the settings page too, so without it a settings
+  // change would write labels to products before the terms were ever shown —
+  // the gate on the publish action alone would not have caught it.
+  const publish = await mayPublish(shopDomain, admin);
   const policy = await loadPolicy(shopDomain);
   const products = await prisma.productAssessment.findMany({
     where: { shopDomain },

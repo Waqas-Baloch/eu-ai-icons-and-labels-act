@@ -11,6 +11,7 @@ import { TERMS_VERSION } from "~/lib/terms";
 import { redirectEmbedded } from "~/lib/embedded-redirect.server";
 import { isAlwaysAllowed, trialEndFrom } from "~/lib/entitlement";
 import { resolveEntitlement } from "~/lib/entitlement.server";
+import { reassessStored } from "~/lib/scan.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin, billing } = await authenticate.admin(request);
@@ -67,10 +68,39 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // write to a merchant's products. See app/lib/terms.server.ts for why.
   const url = new URL(request.url);
 
+  // What the database believed before resolveEntitlement() overwrites it. A
+  // shop that was not subscribed a moment ago and is now has just approved a
+  // charge and been sent back here by Shopify.
+  const planBefore = shop?.plan;
+
   const { access, trialDaysLeft } = await resolveEntitlement(
     shopDomain,
     billing,
   );
+
+  // Release whatever the lock held back.
+  //
+  // The same shape as accepting the terms (see app/routes/app.terms.tsx):
+  // while the shop was locked, the scan and the product webhooks went on
+  // assessing but published nothing, so the app and the storefront disagree.
+  // Subscribing is the moment that resolves it.
+  //
+  // Detected here rather than in the billing route because this loader is the
+  // parent — it runs first on the way back from Shopify, and it is what writes
+  // Shop.plan, so by the time the billing loader runs the transition is gone.
+  //
+  // Failure must not cost the merchant the subscription Shopify has already
+  // recorded. The next scan or product edit republishes anything missed.
+  if (access === "subscribed" && planBefore !== "subscribed") {
+    try {
+      await reassessStored(shopDomain, admin);
+    } catch (error) {
+      console.error(
+        `[${shopDomain}] publishing held-back labels after subscribing failed:`,
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
 
   // Second gate, after terms. Locked shops keep their audit trail and its
   // export — see isAlwaysAllowed() — and every label already published stays

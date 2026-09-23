@@ -39,17 +39,42 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const now = new Date();
   const trialDaysLeft = trialDaysRemaining(shop?.trialEndsAt, now);
 
+  const access = accessState({
+    trialEndsAt: shop?.trialEndsAt,
+    hasActivePayment: check.hasActivePayment,
+    now,
+  });
+
+  /*
+   * How many products have been looked at since the lock closed.
+   *
+   * A locked shop is still assessed — the webhooks keep running, results are
+   * still stored — but nothing reaches the storefront. The merchant has to be
+   * told that plainly. A compliance tool that quietly stops working is worse
+   * than one that visibly stops: the merchant goes on believing their catalog
+   * is labelled while a newly added AI image sits there undisclosed.
+   *
+   * This counts products re-assessed after the trial ended, which is exactly
+   * the set whose results were withheld. It does not claim they all changed.
+   */
+  const heldBack =
+    access === "locked" && shop?.trialEndsAt
+      ? await prisma.productAssessment.count({
+          where: {
+            shopDomain: session.shop,
+            lastAssessedAt: { gt: shop.trialEndsAt },
+          },
+        })
+      : 0;
+
   return {
     hasActivePayment: check.hasActivePayment,
     activePlans: check.appSubscriptions.map((subscription) => subscription.name),
     productCount,
     trialEndsAt: shop?.trialEndsAt?.toISOString() ?? null,
     trialDaysLeft,
-    access: accessState({
-      trialEndsAt: shop?.trialEndsAt,
-      hasActivePayment: check.hasActivePayment,
-      now,
-    }),
+    heldBack,
+    access,
   };
 };
 
@@ -218,12 +243,34 @@ export default function Billing() {
         </s-banner>
       )}
 
+      {/*
+        The merchant must leave this page knowing one specific thing: new and
+        changed images are no longer being labelled. Anything vaguer invites
+        them to assume the app is still covering them, which in a tool people
+        rely on legally is the most damaging thing it could imply.
+      */}
       {data.access === "locked" && (
-        <s-banner tone="critical" heading="Your free trial has ended">
+        <s-banner tone="critical" heading="Labelling has stopped">
           <s-paragraph>
-            Subscribe to assess products and publish labels again. Two things
-            continue regardless: every label already on your storefront keeps
-            showing, and your audit trail stays readable and exportable.
+            <s-text type="strong">
+              Your free trial has ended, so no new labels are being published to
+              your storefront.
+            </s-text>{" "}
+            If you add or replace a product image now, it will not be assessed
+            for disclosure and no label will appear on it.
+          </s-paragraph>
+          {data.heldBack > 0 && (
+            <s-paragraph>
+              {data.heldBack} product{data.heldBack === 1 ? " has" : "s have"}{" "}
+              been checked since your trial ended and the results were held
+              back. Subscribing publishes all of them straight away — you do not
+              need to scan again.
+            </s-paragraph>
+          )}
+          <s-paragraph>
+            Two things continue regardless: every label already on your
+            storefront keeps showing, and your audit trail stays readable and
+            exportable.
           </s-paragraph>
         </s-banner>
       )}
