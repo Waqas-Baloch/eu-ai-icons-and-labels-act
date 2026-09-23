@@ -62,7 +62,7 @@ describe("terms gate sits at publish, not at the door", () => {
   it("holds publishing back in reassessStored as well", () => {
     const scan = code("app/lib/scan.server.ts");
     const fn = scan.slice(scan.indexOf("export async function reassessStored"));
-    expect(fn.slice(0, 1200)).toContain("await hasAcceptedTerms(shopDomain)");
+    expect(fn.slice(0, 1200)).toContain("await mayPublish(shopDomain, admin)");
     expect(fn).toContain("if (admin && publish)");
   });
 
@@ -71,8 +71,22 @@ describe("terms gate sits at publish, not at the door", () => {
   it("holds publishing back until the terms are accepted", () => {
     const scan = code("app/lib/scan.server.ts");
     expect(scan).toContain("publish = true");
-    expect(scan).toContain("const publish = await hasAcceptedTerms(shopDomain)");
+    expect(scan).toContain("const publish = await mayPublish(shopDomain, admin)");
     expect(scan).toContain("const published = publish");
+  });
+
+  /*
+   * The terms check now lives inside mayPublish(), which also enforces billing.
+   * Folding the two together is what closed the webhook hole, but it would be
+   * an easy thing to unpick later without noticing that the terms went with it.
+   */
+  it("keeps the terms check inside mayPublish", () => {
+    const entitlement = code("app/lib/entitlement.server.ts");
+    const fn = entitlement.slice(
+      entitlement.indexOf("export async function mayPublish"),
+    );
+    expect(fn).toContain("hasAcceptedTerms(shopDomain)");
+    expect(fn).toContain("return false");
   });
 
   // Otherwise the app would show labels the storefront never received.
